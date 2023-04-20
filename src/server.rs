@@ -10,7 +10,34 @@ use tokio::{
 use tokio_tungstenite::{accept_async, tungstenite::protocol::Message, WebSocketStream};
 
 use std::collections::HashMap;
+use std::error::Error;
+use std::fmt;
 use std::sync::Arc;
+
+#[derive(Debug)]
+struct GenericError {
+    details: String,
+}
+
+impl GenericError {
+    fn new(msg: &str) -> GenericError {
+        GenericError {
+            details: msg.to_string(),
+        }
+    }
+}
+
+impl fmt::Display for GenericError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.details)
+    }
+}
+
+impl Error for GenericError {
+    fn description(&self) -> &str {
+        &self.details
+    }
+}
 
 pub struct Server {
     datastore: Arc<Mutex<Datastore>>,
@@ -101,146 +128,16 @@ where
 
                         match event.type_() {
                             messaging::ContentType::MESSAGE => {
-                                let message = flatbuffers::root::<messaging::Message>(content)
-                                    .expect("Failed to process websocket message content");
-
-                                let payload = match message.payload() {
-                                    Some(payload) => flatbuffers::root::<messaging::Payload>(payload)
-                                        .expect("Failed to process websocket message content"),
-                                    None => continue,
-                                };
-
-                                // TODO validate message authentication and authorization
-                                if let Some(recipient) = payload.recipient() {
-                                    let mut ds = datastore.lock().await;
-                                    let identifier = Identifier::Referenced(recipient.to_vec());
-
-                                    // If the inbox exists, push the message
-                                    if let Some(inbox) = ds.messages.get_mut(&identifier) {
-                                        inbox.push(data.clone());
-                                        ack(&mut socket_tx, event.id().unwrap()).await;
-                                    } else {
-                                        err(&mut socket_tx, event.id().unwrap(), b"recipient does not exist").await;
-                                        continue;
-                                    };
-
-                                    // if there are subscribers, forward them the messages
-                                    if let Some(subscribers) = ds.subscribers.get_mut(&identifier) {
-                                        for sub in subscribers {
-                                            sub.send(Message::Binary(data.clone())).await.expect("failed to send message to subscriber");
-                                        }
-                                    };
-
-                                    drop(ds);
+                                match handle_message(&data, content, &datastore).await {
+                                    Ok(_) => ack(&mut socket_tx, event.id().unwrap()).await,
+                                    Err(ge) => err(&mut socket_tx, event.id().unwrap(), ge.details.as_bytes()).await,
                                 }
                             },
                             messaging::ContentType::SUBSCRIBE => {
-                                let subscribe =
-                                flatbuffers::root::<messaging::Subscribe>(content).expect("Subscribe event invalid");
-
-                                let mut subscriptions = Vec::new();
-
-                                // setup subscriptions
-                                for subscription in subscribe
-                                    .subscriptions()
-                                    .expect("Subscribe subscriptions empty")
-                                {
-                                    let details_buf = subscription.details().expect("Subscription details empty");
-                                    let details_len = details_buf.len();
-                                    let signatures = subscription
-                                        .signatures()
-                                        .expect("Subscription signatures empty");
-
-                                    let details = flatbuffers::root::<messaging::SubscriptionDetails>(details_buf)
-                                        .expect("Subscription details invalid");
-                                    let inbox = details.inbox().expect("Subscription inbox missing");
-
-                                    let (mut authenticated, mut authorized) = (false, false);
-                                    let mut subscriber: Option<&[u8]> = None;
-
-                                    // validate the subscriptions signatures
-                                    for signature in signatures {
-                                        let sig = signature.signature().expect("Subscription signature empty");
-
-                                        match signature.type_() {
-                                            messaging::SignatureType::PAYLOAD => {
-                                                // authenticate the subscriber over the subscriptions details
-                                                let signer = signature.signer().unwrap_or(inbox);
-
-                                                let mut details_sig_buf = vec![0; details_len + 1];
-                                                details_sig_buf[0] = messaging::SignatureType::PAYLOAD.0 as u8;
-                                                details_sig_buf[1..details_len + 1].copy_from_slice(details_buf);
-
-                                                let pk = PublicKey::from_bytes(signer, crate::keypair::Algorithm::Ed25519)
-                                                    .expect("Subscription signer invalid");
-
-                                                if !(pk.verify(&details_sig_buf, sig)) {
-                                                    err(&mut socket_tx, event.id().unwrap(), b"bad auth").await;
-                                                    return;
-                                                };
-
-                                                subscriptions.push(inbox.to_vec());
-
-                                                if inbox == signer {
-                                                    (authenticated, authorized) = (true, true);
-                                                    break;
-                                                }
-
-                                                subscriber = Some(signer);
-                                                authenticated = true;
-                                            }
-                                            messaging::SignatureType::SUBSCRIPTION => {
-                                                let mut subscription_sig_buf = vec![0; 65];
-                                                subscription_sig_buf[0] = messaging::SignatureType::SUBSCRIPTION.0 as u8;
-                                                subscription_sig_buf[1..33].copy_from_slice(inbox);
-                                                subscription_sig_buf[33..65]
-                                                    .copy_from_slice(subscriber.expect("Subscriber empty"));
-
-                                                let pk = PublicKey::from_bytes(inbox, crate::keypair::Algorithm::Ed25519)
-                                                    .expect("Subscription signer invalid");
-
-                                                if !pk.verify(&subscription_sig_buf, sig) {
-                                                    err(&mut socket_tx, event.id().unwrap(), b"bad auth").await;
-                                                    return;
-                                                };
-
-                                                authorized = true;
-                                            }
-                                            _ => continue, // skip other signature types for now
-                                        }
-                                    }
-
-                                    assert!(authenticated && authorized);
+                                match handle_subscribe(content, write_tx.clone(), &datastore).await {
+                                    Ok(_) => ack(&mut socket_tx, event.id().unwrap()).await,
+                                    Err(ge) => err(&mut socket_tx, event.id().unwrap(), ge.details.as_bytes()).await,
                                 }
-
-                                // acknowledge the subscriptions
-                                ack(&mut socket_tx, event.id().unwrap()).await;
-
-                                let mut ds = datastore.lock().await;
-
-                                for subscription in subscriptions {
-                                    let identifier = Identifier::Referenced(subscription);
-
-                                    // TODO replay messages...
-
-                                    if let Some(subscribers) = ds.subscribers.get_mut(&identifier) {
-                                        subscribers.push(write_tx.clone());
-                                    } else {
-                                        ds.subscribers
-                                            .insert(identifier.clone(), vec![write_tx.clone()]);
-                                    }
-
-                                    if let Some(inbox) = ds.messages.get(&identifier) {
-                                        for msg in inbox {
-                                            write_tx
-                                                .send(Message::Binary(msg.clone()))
-                                                .await
-                                                .expect("failed to replay message");
-                                        }
-                                    }
-                                }
-
-                                drop(ds);
                             },
                             messaging::ContentType::OPEN => {
 
@@ -252,10 +149,6 @@ where
 
                             },
                         }
-
-
-
-
                     } else if m.is_ping() {
                         println!("ping");
                     } else if m.is_pong() {
@@ -266,12 +159,160 @@ where
             message = write_rx.next() => {
                 if let Some(message) = message {
                     if socket_tx.send(message).await.is_err() {
-                        return
+                        break
                     }
                 }
             }
         }
     }
+}
+
+async fn handle_message(
+    data: &[u8],
+    content: &[u8],
+    datastore: &Arc<Mutex<Datastore>>,
+) -> Result<(), GenericError> {
+    let message = flatbuffers::root::<messaging::Message>(content)
+        .expect("Failed to process websocket message content");
+
+    let payload = match message.payload() {
+        Some(payload) => flatbuffers::root::<messaging::Payload>(payload)
+            .expect("Failed to process websocket message content"),
+        None => return Err(GenericError::new("invalid message payload")),
+    };
+
+    // TODO validate message authentication and authorization
+    if let Some(recipient) = payload.recipient() {
+        let mut ds = datastore.lock().await;
+        let identifier = Identifier::Referenced(recipient.to_vec());
+
+        // If the inbox exists, push the message
+        if let Some(inbox) = ds.messages.get_mut(&identifier) {
+            inbox.push(data.to_vec());
+        } else {
+            return Err(GenericError::new("recipient inbox not found"));
+        };
+
+        // if there are subscribers, forward them the messages
+        if let Some(subscribers) = ds.subscribers.get_mut(&identifier) {
+            for sub in subscribers {
+                sub.send(Message::Binary(data.to_vec()))
+                    .await
+                    .expect("failed to send message to subscriber");
+            }
+        };
+
+        drop(ds);
+    }
+    Ok(())
+}
+
+async fn handle_subscribe(
+    content: &[u8],
+    write_tx: async_channel::Sender<Message>,
+    datastore: &Arc<Mutex<Datastore>>,
+) -> Result<(), GenericError> {
+    let subscribe =
+        flatbuffers::root::<messaging::Subscribe>(content).expect("Subscribe event invalid");
+
+    let mut subscriptions = Vec::new();
+
+    // setup subscriptions
+    for subscription in subscribe
+        .subscriptions()
+        .expect("Subscribe subscriptions empty")
+    {
+        let details_buf = subscription.details().expect("Subscription details empty");
+        let details_len = details_buf.len();
+        let signatures = subscription
+            .signatures()
+            .expect("Subscription signatures empty");
+
+        let details = flatbuffers::root::<messaging::SubscriptionDetails>(details_buf)
+            .expect("Subscription details invalid");
+        let inbox = details.inbox().expect("Subscription inbox missing");
+
+        let (mut authenticated, mut authorized) = (false, false);
+        let mut subscriber: Option<&[u8]> = None;
+
+        // validate the subscriptions signatures
+        for signature in signatures {
+            let sig = signature.signature().expect("Subscription signature empty");
+
+            match signature.type_() {
+                messaging::SignatureType::PAYLOAD => {
+                    // authenticate the subscriber over the subscriptions details
+                    let signer = signature.signer().unwrap_or(inbox);
+
+                    let mut details_sig_buf = vec![0; details_len + 1];
+                    details_sig_buf[0] = messaging::SignatureType::PAYLOAD.0 as u8;
+                    details_sig_buf[1..details_len + 1].copy_from_slice(details_buf);
+
+                    let pk = PublicKey::from_bytes(signer, crate::keypair::Algorithm::Ed25519)
+                        .expect("Subscription signer invalid");
+
+                    if !(pk.verify(&details_sig_buf, sig)) {
+                        return Err(GenericError::new("bad auth"));
+                    };
+
+                    subscriptions.push(inbox.to_vec());
+
+                    if inbox == signer {
+                        (authenticated, authorized) = (true, true);
+                        break;
+                    }
+
+                    subscriber = Some(signer);
+                    authenticated = true;
+                }
+                messaging::SignatureType::SUBSCRIPTION => {
+                    let mut subscription_sig_buf = vec![0; 65];
+                    subscription_sig_buf[0] = messaging::SignatureType::SUBSCRIPTION.0 as u8;
+                    subscription_sig_buf[1..33].copy_from_slice(inbox);
+                    subscription_sig_buf[33..65]
+                        .copy_from_slice(subscriber.expect("Subscriber empty"));
+
+                    let pk = PublicKey::from_bytes(inbox, crate::keypair::Algorithm::Ed25519)
+                        .expect("Subscription signer invalid");
+
+                    if !pk.verify(&subscription_sig_buf, sig) {
+                        return Err(GenericError::new("bad auth"));
+                    };
+
+                    authorized = true;
+                }
+                _ => continue, // skip other signature types for now
+            }
+        }
+
+        assert!(authenticated && authorized);
+    }
+
+    let mut ds = datastore.lock().await;
+
+    for subscription in subscriptions {
+        let identifier = Identifier::Referenced(subscription);
+
+        if let Some(inbox) = ds.messages.get(&identifier) {
+            for msg in inbox {
+                write_tx
+                    .send(Message::Binary(msg.clone()))
+                    .await
+                    .expect("failed to replay message");
+            }
+        }
+
+        if let Some(subscribers) = ds.subscribers.get_mut(&identifier) {
+            subscribers.push(write_tx.clone());
+        } else {
+            ds.subscribers
+                .insert(identifier.clone(), vec![write_tx.clone()]);
+        }
+    }
+
+    drop(ds);
+
+    Ok(())
 }
 
 async fn ack<S>(socket_tx: &mut SplitSink<WebSocketStream<S>, Message>, id: &[u8])
