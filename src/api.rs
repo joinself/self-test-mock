@@ -7,18 +7,21 @@ use axum::{
     Router,
 };
 use tokio::sync::Mutex;
-use tungstenite::protocol::frame::coding::Data;
 
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-pub fn test_api(runtime: tokio::runtime::Runtime, datastore: Arc<Mutex<Datastore>>) {
+pub fn test_api(
+    runtime: &mut tokio::runtime::Runtime,
+    port: u16,
+    datastore: Arc<Mutex<Datastore>>,
+) {
     let app = Router::new()
         .route("/v2/identities", post(identity_create))
         .route("/v2/identities/:id", get(identity_get))
         .with_state(datastore);
 
-    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
+    let addr = SocketAddr::from(([127, 0, 0, 1], port));
 
     let (con_tx, con_rx) = crossbeam::channel::bounded(1);
 

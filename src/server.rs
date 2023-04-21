@@ -1,4 +1,4 @@
-use crate::{datastore::Datastore, messaging};
+use crate::{api, datastore::Datastore, messaging};
 
 use tokio::{runtime::Runtime, sync::Mutex};
 
@@ -10,19 +10,20 @@ pub struct Server {
 }
 
 impl Server {
-    pub fn new() -> Server {
+    pub fn new(api_port: u16, messaging_port: u16) -> Server {
         let datastore = Arc::new(Mutex::new(Datastore::new()));
+        let mut runtime = tokio::runtime::Runtime::new().expect("failed to start tokio runtime");
 
-        Server {
-            datastore: datastore.clone(),
-            runtime: messaging::test_messaging(datastore),
-        }
+        api::test_api(&mut runtime, api_port, datastore.clone());
+        messaging::test_messaging(&mut runtime, messaging_port, datastore.clone());
+
+        Server { datastore, runtime }
     }
 }
 
 impl Default for Server {
     fn default() -> Self {
-        Server::new()
+        Server::new(3000, 4000)
     }
 }
 

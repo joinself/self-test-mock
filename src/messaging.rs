@@ -14,28 +14,30 @@ use tokio_tungstenite::{accept_async, tungstenite::protocol::Message, WebSocketS
 
 use std::sync::Arc;
 
-pub fn test_messaging(datastore: Arc<Mutex<Datastore>>) -> Runtime {
+pub fn test_messaging(
+    runtime: &mut Runtime,
+    messaging_port: u16,
+    datastore: Arc<Mutex<Datastore>>,
+) {
     let (con_tx, con_rx) = crossbeam::channel::bounded(1);
 
     let f = async move {
-        let listener = TcpListener::bind("127.0.0.1:12345").await.unwrap();
+        let listener = TcpListener::bind(format!("127.0.0.1:{}", messaging_port))
+            .await
+            .unwrap();
         con_tx.send(()).unwrap();
         let (connection, _) = listener.accept().await.expect("No connections to accept");
         let stream = accept_async(connection).await;
         let stream = stream.expect("Failed to handshake with connection");
         run_connection(stream, datastore).await;
     };
-
-    let rt = tokio::runtime::Runtime::new().unwrap();
-    rt.spawn(f);
+    runtime.spawn(f);
 
     con_rx
         .recv_deadline(std::time::Instant::now() + std::time::Duration::from_secs(1))
         .expect("Server not ready");
 
     std::thread::sleep(std::time::Duration::from_millis(100));
-
-    rt
 }
 
 async fn run_connection<S>(connection: WebSocketStream<S>, datastore: Arc<Mutex<Datastore>>)
