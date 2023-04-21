@@ -47,7 +47,7 @@ pub struct Server {
 pub struct Datastore {
     messages: HashMap<Identifier, Vec<Vec<u8>>>,
     prekeys: HashMap<Identifier, Vec<Vec<u8>>>,
-    subscribers: HashMap<Identifier, Vec<async_channel::Sender<Message>>>,
+    subscribers: HashMap<Identifier, Vec<(Vec<u8>, async_channel::Sender<Message>)>>,
 }
 
 impl Datastore {
@@ -114,6 +114,9 @@ where
     let (mut socket_tx, mut socket_rx) = connection.split();
     let (write_tx, mut write_rx) = async_channel::unbounded();
 
+    let connection_id = crate::crypto::random_id();
+    let mut subscriptions = Vec::new();
+
     loop {
         tokio::select! {
             message = socket_rx.next() => {
@@ -130,13 +133,19 @@ where
                             messaging::ContentType::MESSAGE => {
                                 match handle_message(&data, content, &datastore).await {
                                     Ok(_) => ack(&mut socket_tx, event.id().unwrap()).await,
-                                    Err(ge) => err(&mut socket_tx, event.id().unwrap(), ge.details.as_bytes()).await,
+                                    Err(ge) => {
+                                        err(&mut socket_tx, event.id().unwrap(), ge.details.as_bytes()).await;
+                                        break;
+                                    },
                                 }
                             },
                             messaging::ContentType::SUBSCRIBE => {
-                                match handle_subscribe(content, write_tx.clone(), &datastore).await {
+                                match handle_subscribe(content, write_tx.clone(), &connection_id, &mut subscriptions, &datastore).await {
                                     Ok(_) => ack(&mut socket_tx, event.id().unwrap()).await,
-                                    Err(ge) => err(&mut socket_tx, event.id().unwrap(), ge.details.as_bytes()).await,
+                                    Err(ge) => {
+                                        err(&mut socket_tx, event.id().unwrap(), ge.details.as_bytes()).await;
+                                        break;
+                                    },
                                 }
                             },
                             messaging::ContentType::OPEN => {
@@ -164,6 +173,19 @@ where
                 }
             }
         }
+    }
+
+    // cleanup subscriptions...
+
+    let mut ds = datastore.lock().await;
+
+    for subscriber in subscriptions {
+        // Ignore if no such element is found
+        if let Some(s) = ds.subscribers.get_mut(&subscriber) {
+            if let Some(p) = s.iter().position(|(conn_id, _)| connection_id.eq(conn_id)) {
+                s.remove(p);
+            }
+        };
     }
 }
 
@@ -195,14 +217,12 @@ async fn handle_message(
 
         // if there are subscribers, forward them the messages
         if let Some(subscribers) = ds.subscribers.get_mut(&identifier) {
-            for sub in subscribers {
+            for (_, sub) in subscribers {
                 sub.send(Message::Binary(data.to_vec()))
                     .await
                     .expect("failed to send message to subscriber");
             }
         };
-
-        drop(ds);
     }
     Ok(())
 }
@@ -210,12 +230,12 @@ async fn handle_message(
 async fn handle_subscribe(
     content: &[u8],
     write_tx: async_channel::Sender<Message>,
+    connection_id: &[u8],
+    subscriptions: &mut Vec<Identifier>,
     datastore: &Arc<Mutex<Datastore>>,
 ) -> Result<(), GenericError> {
     let subscribe =
         flatbuffers::root::<messaging::Subscribe>(content).expect("Subscribe event invalid");
-
-    let mut subscriptions = Vec::new();
 
     // setup subscriptions
     for subscription in subscribe
@@ -255,7 +275,8 @@ async fn handle_subscribe(
                         return Err(GenericError::new("bad auth"));
                     };
 
-                    subscriptions.push(inbox.to_vec());
+                    let identifier = Identifier::Referenced(inbox.to_vec());
+                    subscriptions.push(identifier);
 
                     if inbox == signer {
                         (authenticated, authorized) = (true, true);
@@ -291,9 +312,7 @@ async fn handle_subscribe(
     let mut ds = datastore.lock().await;
 
     for subscription in subscriptions {
-        let identifier = Identifier::Referenced(subscription);
-
-        if let Some(inbox) = ds.messages.get(&identifier) {
+        if let Some(inbox) = ds.messages.get(subscription) {
             for msg in inbox {
                 write_tx
                     .send(Message::Binary(msg.clone()))
@@ -302,15 +321,15 @@ async fn handle_subscribe(
             }
         }
 
-        if let Some(subscribers) = ds.subscribers.get_mut(&identifier) {
-            subscribers.push(write_tx.clone());
+        if let Some(subscribers) = ds.subscribers.get_mut(subscription) {
+            subscribers.push((connection_id.to_vec(), write_tx.clone()));
         } else {
-            ds.subscribers
-                .insert(identifier.clone(), vec![write_tx.clone()]);
+            ds.subscribers.insert(
+                subscription.clone(),
+                vec![(connection_id.to_vec(), write_tx.clone())],
+            );
         }
     }
-
-    drop(ds);
 
     Ok(())
 }
