@@ -37,6 +37,20 @@ impl SignatureGraph {
         }
     }
 
+    pub fn id(&self) -> Option<Vec<u8>> {
+        self.id.clone()
+    }
+
+    pub fn signing_keys(&self) -> Vec<Vec<u8>> {
+        let mut keys = Vec::new();
+        self.keys.borrow().into_iter().for_each(|(id, node)| {
+            if node.as_ref().borrow().typ == KeyRole::Signing {
+                keys.push(id.clone());
+            }
+        });
+        keys
+    }
+
     pub fn load(history: &[Vec<u8>], verify: bool) -> Result<SignatureGraph, SelfError> {
         let mut sg = SignatureGraph {
             id: None,

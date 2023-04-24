@@ -5,8 +5,9 @@ edition = "2021"
 
 [dependencies]
 async-channel = "1.8.0"
-axum = "0.6.16"
+axum = {version =  "0.6.16", features = ["macros"]}
 base64 = "0.13.1"
+byteorder = "1.4.3"
 chrono = "0.4.22"
 ciborium = "0.2.0"
 coset = "0.3.4"
@@ -14,6 +15,7 @@ crossbeam = "0.8.2"
 flatbuffers = "2.1.2"
 futures-util = "0.3.25"
 hex = "0.4.3"
+hyper = "0.14.26"
 libc = "0.2"
 ntp = "0.5.0"
 rand = "0.8.5"
