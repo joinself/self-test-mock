@@ -5,7 +5,7 @@ use crate::{
 use futures_util::{stream::SplitSink, SinkExt, StreamExt};
 use tokio::{
     io::{AsyncRead, AsyncWrite},
-    net::TcpListener,
+    net::{TcpListener, TcpStream},
     runtime::Runtime,
     sync::Mutex,
 };
@@ -26,10 +26,10 @@ pub fn test_messaging(
             .await
             .unwrap();
         con_tx.send(()).unwrap();
-        let (connection, _) = listener.accept().await.expect("No connections to accept");
-        let stream = accept_async(connection).await;
-        let stream = stream.expect("Failed to handshake with connection");
-        run_connection(stream, datastore).await;
+
+        while let Ok((connection, _)) = listener.accept().await {
+            tokio::spawn(accept_connection(connection, datastore.clone()));
+        }
     };
     runtime.spawn(f);
 
@@ -38,6 +38,12 @@ pub fn test_messaging(
         .expect("Server not ready");
 
     std::thread::sleep(std::time::Duration::from_millis(100));
+}
+
+async fn accept_connection(connection: TcpStream, datastore: Arc<Mutex<Datastore>>) {
+    let stream = accept_async(connection).await;
+    let stream = stream.expect("Failed to handshake with connection");
+    run_connection(stream, datastore).await;
 }
 
 async fn run_connection<S>(connection: WebSocketStream<S>, datastore: Arc<Mutex<Datastore>>)
