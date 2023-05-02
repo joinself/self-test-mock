@@ -1,6 +1,7 @@
 use crate::crypto::pow::ProofOfWork;
 use crate::datastore::Datastore;
 use crate::identifier::Identifier;
+use crate::models::KeyRequest;
 use crate::siggraph::SignatureGraph;
 
 use axum::{
@@ -16,7 +17,7 @@ use byteorder::{LittleEndian, ReadBytesExt};
 use ciborium::cbor;
 use tokio::sync::Mutex;
 
-use std::{net::SocketAddr, sync::Arc};
+use std::{collections::VecDeque, net::SocketAddr, sync::Arc};
 
 pub fn test_api(
     runtime: &mut tokio::runtime::Runtime,
@@ -27,6 +28,10 @@ pub fn test_api(
         .route("/v2/identities", post(identity_create))
         .route("/v2/identities/:id", get(identity_get))
         .route("/v2/identities/:id/operations", post(operation_create))
+        .route("/v2/keys", post(key_create))
+        .route("/v2/keys/:id", get(key_get))
+        .route("/v2/prekeys/:id", post(prekey_create))
+        .route("/v2/prekeys/:id", get(prekey_get))
         .with_state(datastore);
 
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
@@ -50,10 +55,10 @@ pub fn test_api(
 }
 
 async fn identity_get(
-    Path(key): Path<String>,
+    Path(id): Path<String>,
     State(state): State<Arc<Mutex<Datastore>>>,
 ) -> Response {
-    let identifier = Identifier::Referenced(hex::decode(key).expect("bad hex identifier"));
+    let identifier = Identifier::Referenced(hex::decode(id).expect("bad hex identifier"));
 
     let ds = state.lock().await;
 
@@ -70,7 +75,6 @@ async fn identity_get(
 
 #[debug_handler]
 async fn identity_create(
-    Path(key): Path<String>,
     State(state): State<Arc<Mutex<Datastore>>>,
     mut request: Request<Body>,
 ) -> Response {
@@ -106,7 +110,7 @@ async fn identity_create(
         return StatusCode::UNAUTHORIZED.into_response();
     }
 
-    // create the identity if it doesn't exist
+    // create the identity
     ds.identities.insert(
         Identifier::Referenced(sg.id().expect("does not have identifier")),
         vec![body.to_vec()],
@@ -115,6 +119,12 @@ async fn identity_create(
     for sk in &sg.signing_keys() {
         ds.messages
             .insert(Identifier::Referenced(sk.to_vec()), Vec::new());
+        ds.keys.insert(
+            Identifier::Referenced(sk.to_vec()),
+            Some(Identifier::Referenced(
+                sg.id().expect("does not have identifier"),
+            )),
+        );
     }
 
     Bytes::new().into_response()
@@ -122,7 +132,7 @@ async fn identity_create(
 
 #[debug_handler]
 async fn operation_create(
-    Path(key): Path<String>,
+    Path(id): Path<String>,
     State(state): State<Arc<Mutex<Datastore>>>,
     mut request: Request<Body>,
 ) -> Response {
@@ -152,7 +162,7 @@ async fn operation_create(
 
     let mut ds = state.lock().await;
 
-    let identifier = Identifier::Referenced(hex::decode(key).expect("identifier is not hex"));
+    let identifier = Identifier::Referenced(hex::decode(id).expect("identifier is not hex"));
 
     // load and validate the signature graph operation
     let operations = match ds.identities.get_mut(&identifier) {
@@ -172,9 +182,211 @@ async fn operation_create(
     for sk in &sg.signing_keys() {
         ds.messages
             .insert(Identifier::Referenced(sk.to_vec()), Vec::new());
+        ds.keys.insert(
+            Identifier::Referenced(sk.to_vec()),
+            Some(identifier.clone()),
+        );
     }
 
     Bytes::new().into_response()
+}
+
+#[debug_handler]
+async fn key_create(
+    State(state): State<Arc<Mutex<Datastore>>>,
+    mut request: Request<Body>,
+) -> Response {
+    let headers = request.headers().clone();
+
+    // get pow headers
+    let pow_hash = match headers.get("Self-Pow-Hash") {
+        Some(pow_hash) => pow_hash,
+        None => return StatusCode::BAD_REQUEST.into_response(),
+    }
+    .as_bytes();
+
+    let pow_nonce = match headers.get("Self-Pow-Nonce") {
+        Some(pow_hash) => pow_hash,
+        None => return StatusCode::BAD_REQUEST.into_response(),
+    }
+    .as_bytes()
+    .read_u64::<LittleEndian>()
+    .unwrap();
+
+    let body = get_body(request.body_mut()).await;
+
+    // validate pow
+    if !ProofOfWork::new(8).validate(&body, pow_hash, pow_nonce) {
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
+
+    let mut ds = state.lock().await;
+
+    let req_body: &[u8] = &body;
+
+    let req: KeyRequest = match ciborium::de::from_reader(req_body) {
+        Ok(req) => req,
+        Err(_) => return StatusCode::BAD_REQUEST.into_response(),
+    };
+
+    let identifier = Identifier::Referenced(req.identifier);
+
+    // create an inbox for the key
+    if ds.messages.contains_key(&identifier) {
+        return StatusCode::CONFLICT.into_response();
+    }
+
+    ds.keys.insert(identifier.clone(), None);
+    ds.messages.insert(identifier, Vec::new());
+
+    Bytes::new().into_response()
+}
+
+#[debug_handler]
+async fn key_get(
+    Path(id): Path<String>,
+    State(state): State<Arc<Mutex<Datastore>>>,
+    mut request: Request<Body>,
+) -> Response {
+    let headers = request.headers().clone();
+
+    // get pow headers
+    let pow_hash = match headers.get("Self-Pow-Hash") {
+        Some(pow_hash) => pow_hash,
+        None => return StatusCode::BAD_REQUEST.into_response(),
+    }
+    .as_bytes();
+
+    let pow_nonce = match headers.get("Self-Pow-Nonce") {
+        Some(pow_hash) => pow_hash,
+        None => return StatusCode::BAD_REQUEST.into_response(),
+    }
+    .as_bytes()
+    .read_u64::<LittleEndian>()
+    .unwrap();
+
+    let body = get_body(request.body_mut()).await;
+
+    // validate pow
+    if !ProofOfWork::new(8).validate(&body, pow_hash, pow_nonce) {
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
+
+    let ds = state.lock().await;
+
+    let req_body: &[u8] = &body;
+
+    let req: KeyRequest = match ciborium::de::from_reader(req_body) {
+        Ok(req) => req,
+        Err(_) => return StatusCode::BAD_REQUEST.into_response(),
+    };
+
+    let identifier = Identifier::Referenced(req.identifier);
+
+    if !ds.keys.contains_key(&identifier) {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+
+    Bytes::new().into_response()
+}
+
+#[debug_handler]
+async fn prekey_create(
+    Path(id): Path<String>,
+    State(state): State<Arc<Mutex<Datastore>>>,
+    mut request: Request<Body>,
+) -> Response {
+    let body = get_body(request.body_mut()).await;
+
+    let mut ds = state.lock().await;
+
+    let req_body: &[u8] = &body;
+
+    let req: Vec<Vec<u8>> = match ciborium::de::from_reader(req_body) {
+        Ok(req) => req,
+        Err(_) => return StatusCode::BAD_REQUEST.into_response(),
+    };
+
+    let identifier = Identifier::Referenced(hex::decode(id).expect("bad hex identifier"));
+
+    if !ds.keys.contains_key(&identifier) {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+
+    let queue = match ds.prekeys.get_mut(&identifier) {
+        Some(queue) => queue,
+        None => {
+            ds.prekeys.insert(identifier.clone(), VecDeque::new());
+            ds.prekeys.get_mut(&identifier).expect("not empty")
+        }
+    };
+
+    req.into_iter().for_each(|pk| queue.push_back(pk));
+
+    Bytes::new().into_response()
+}
+
+#[debug_handler]
+async fn prekey_get(
+    Path(id): Path<String>,
+    State(state): State<Arc<Mutex<Datastore>>>,
+    request: Request<Body>,
+) -> Response {
+    let headers = request.headers().clone();
+
+    let identifier = Identifier::Referenced(hex::decode(id).expect("bad hex identifier"));
+
+    if let Some(authorization) = headers.get("Authorization") {
+        // use auth token
+        let token =
+            match base64::decode_config(&authorization.as_bytes()[7..], base64::URL_SAFE_NO_PAD) {
+                Ok(token) => token,
+                Err(_) => return StatusCode::UNAUTHORIZED.into_response(),
+            };
+
+        let authorized = match crate::token::validate(&token) {
+            Ok(authorized) => authorized,
+            Err(_) => return StatusCode::UNAUTHORIZED.into_response(),
+        };
+
+        if authorized.is_empty() || authorized[0] != identifier {
+            return StatusCode::UNAUTHORIZED.into_response();
+        }
+    } else {
+        // use proof of work
+        // get pow headers
+        let pow_hash = match headers.get("Self-Pow-Hash") {
+            Some(pow_hash) => pow_hash,
+            None => return StatusCode::BAD_REQUEST.into_response(),
+        }
+        .as_bytes();
+
+        let pow_nonce = match headers.get("Self-Pow-Nonce") {
+            Some(pow_hash) => pow_hash,
+            None => return StatusCode::BAD_REQUEST.into_response(),
+        }
+        .as_bytes()
+        .read_u64::<LittleEndian>()
+        .unwrap();
+
+        let request_pow: Vec<u8> = Vec::new();
+        request_pow.copy_from_slice(authorized);
+
+        // validate pow
+        if !ProofOfWork::new(8).validate(&body, pow_hash, pow_nonce) {
+            return StatusCode::UNAUTHORIZED.into_response();
+        }
+    }
+
+    let mut ds = state.lock().await;
+
+    match ds.prekeys.get_mut(&identifier) {
+        Some(queue) => match queue.pop_front() {
+            Some(prekey) => prekey.into_response(),
+            None => StatusCode::NOT_FOUND.into_response(),
+        },
+        None => StatusCode::NOT_FOUND.into_response(),
+    }
 }
 
 async fn get_body<B>(body: B) -> Bytes
