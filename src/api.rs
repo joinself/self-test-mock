@@ -1,8 +1,8 @@
-use crate::crypto::pow::ProofOfWork;
 use crate::datastore::Datastore;
 use crate::identifier::Identifier;
 use crate::models::KeyRequest;
 use crate::siggraph::SignatureGraph;
+use crate::{crypto::pow::ProofOfWork, models::PrekeyResponse};
 
 use axum::{
     body::{Body, Bytes},
@@ -349,40 +349,54 @@ async fn prekey_get(
             Err(_) => return StatusCode::UNAUTHORIZED.into_response(),
         };
 
-        if authorized.is_empty() || authorized[0] != identifier {
+        let pow_hash = headers.get("Self-Pow-Hash");
+        let pow_nonce = headers.get("Self-Pow-Nonce");
+
+        if authorized.len() == 1 && pow_hash.is_some() && pow_nonce.is_some() {
+            let pow_hash = pow_hash.unwrap().as_bytes();
+
+            let pow_nonce = pow_nonce
+                .unwrap()
+                .as_bytes()
+                .read_u64::<LittleEndian>()
+                .unwrap();
+
+            let req_scheme = request.uri().scheme_str().unwrap();
+            let req_host = request.uri().host().unwrap();
+            let req_path = request.uri().path_and_query().unwrap().as_str();
+
+            let mut req_pow = vec![
+                0;
+                32 + request.method().as_str().len()
+                    + req_scheme.len()
+                    + req_host.len()
+                    + req_path.len()
+            ];
+            req_pow.copy_from_slice(&authorized[0].id());
+            req_pow[32..].copy_from_slice(req_scheme.as_bytes());
+            req_pow[32 + req_scheme.len()..].copy_from_slice(req_host.as_bytes());
+            req_pow[32 + req_scheme.len() + req_host.len()..].copy_from_slice(req_path.as_bytes());
+
+            if !ProofOfWork::new(8).validate(&req_pow, pow_hash, pow_nonce) {
+                return StatusCode::UNAUTHORIZED.into_response();
+            }
+        } else if authorized.len() < 2 || authorized[1] != identifier {
             return StatusCode::UNAUTHORIZED.into_response();
         }
     } else {
-        // use proof of work
-        // get pow headers
-        let pow_hash = match headers.get("Self-Pow-Hash") {
-            Some(pow_hash) => pow_hash,
-            None => return StatusCode::BAD_REQUEST.into_response(),
-        }
-        .as_bytes();
-
-        let pow_nonce = match headers.get("Self-Pow-Nonce") {
-            Some(pow_hash) => pow_hash,
-            None => return StatusCode::BAD_REQUEST.into_response(),
-        }
-        .as_bytes()
-        .read_u64::<LittleEndian>()
-        .unwrap();
-
-        let request_pow: Vec<u8> = Vec::new();
-        request_pow.copy_from_slice(authorized);
-
-        // validate pow
-        if !ProofOfWork::new(8).validate(&body, pow_hash, pow_nonce) {
-            return StatusCode::UNAUTHORIZED.into_response();
-        }
+        return StatusCode::UNAUTHORIZED.into_response();
     }
 
     let mut ds = state.lock().await;
 
     match ds.prekeys.get_mut(&identifier) {
         Some(queue) => match queue.pop_front() {
-            Some(prekey) => prekey.into_response(),
+            Some(prekey) => {
+                let mut resp = Vec::new();
+                ciborium::ser::into_writer(&PrekeyResponse { key: prekey }, &mut resp)
+                    .expect("wont fail");
+                resp.into_response()
+            }
             None => StatusCode::NOT_FOUND.into_response(),
         },
         None => StatusCode::NOT_FOUND.into_response(),

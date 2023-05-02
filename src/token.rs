@@ -51,8 +51,6 @@ pub fn validate(token: &[u8]) -> Result<Vec<Identifier>, SelfError> {
         }
 
         authorized.push(Identifier::Referenced(content.iss));
-    } else {
-        return Err(SelfError::MessageNoPayload);
     }
 
     Ok(authorized)
