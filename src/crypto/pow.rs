@@ -26,6 +26,8 @@ impl ProofOfWork {
             }
         }
 
+        println!("target: {:?}", target[..cap].to_vec());
+
         ProofOfWork {
             target: target[..cap].to_vec(),
         }
@@ -69,12 +71,19 @@ impl ProofOfWork {
 
         let computed_hash = crate::crypto::hash::blake2b(&hash_buf);
 
+        println!("computed hash: {:?}", computed_hash);
+
         computed_hash == hash
     }
 
     fn matches(&self, hash: &[u8]) -> bool {
         for offset in 0..(self.target.len() * 8) {
             if hash[offset >> 3] > self.target[offset >> 3] {
+                println!(
+                    "reached: {} target: {}",
+                    hash[offset >> 3],
+                    self.target[offset >> 3]
+                );
                 return false;
             }
         }

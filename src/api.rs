@@ -14,7 +14,7 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use byteorder::{LittleEndian, ReadBytesExt};
+use base64::URL_SAFE_NO_PAD;
 use ciborium::cbor;
 use tokio::sync::Mutex;
 use tower_http::trace::TraceLayer;
@@ -32,7 +32,7 @@ pub fn test_api(
         .route("/v2/identities/:id/operations", post(operation_create))
         .route("/v2/keys", post(key_create))
         .route("/v2/keys/:id", get(key_get))
-        .route("/v2/prekeys/:id", post(prekey_create))
+        .route("/v2/prekeys", post(prekey_create))
         .route("/v2/prekeys/:id", get(prekey_get))
         .layer(TraceLayer::new_for_http())
         .with_state(datastore);
@@ -87,27 +87,40 @@ async fn identity_create(
     println!("identity create...");
     let headers = request.headers().clone();
 
+    println!("POW HASH");
+
     // get pow headers
     let pow_hash = match headers.get("Self-Pow-Hash") {
-        Some(pow_hash) => pow_hash,
+        Some(pow_hash) => base64::decode_config(pow_hash.as_bytes(), URL_SAFE_NO_PAD)
+            .expect("failed to decode pow hash"),
         None => return StatusCode::BAD_REQUEST.into_response(),
-    }
-    .as_bytes();
+    };
+
+    println!("received hash: {:?}", pow_hash);
+
+    println!("POW NONCE");
 
     let pow_nonce = match headers.get("Self-Pow-Nonce") {
-        Some(pow_hash) => pow_hash,
+        Some(pow_nonce) => std::str::from_utf8(pow_nonce.as_bytes())
+            .expect("invalid header utf8")
+            .parse::<u64>()
+            .expect("failed to get u64"),
         None => return StatusCode::BAD_REQUEST.into_response(),
-    }
-    .as_bytes()
-    .read_u64::<LittleEndian>()
-    .unwrap();
+    };
+
+    println!("nonce: {}", pow_nonce);
+
+    println!("GET BODY");
 
     let body = get_body(request.body_mut()).await;
 
+    println!("VALIDATE POW");
+
     // validate pow
-    if !ProofOfWork::new(8).validate(&body, pow_hash, pow_nonce) {
+    if !ProofOfWork::new(20).validate(&body, &pow_hash, pow_nonce) {
         return StatusCode::UNAUTHORIZED.into_response();
     }
+    println!("POW OK!");
 
     let mut ds = state.lock().await;
 
@@ -147,23 +160,23 @@ async fn operation_create(
 
     // get pow headers
     let pow_hash = match headers.get("Self-Pow-Hash") {
-        Some(pow_hash) => pow_hash,
+        Some(pow_hash) => base64::decode_config(pow_hash.as_bytes(), URL_SAFE_NO_PAD)
+            .expect("failed to decode pow hash"),
         None => return StatusCode::BAD_REQUEST.into_response(),
-    }
-    .as_bytes();
+    };
 
     let pow_nonce = match headers.get("Self-Pow-Nonce") {
-        Some(pow_hash) => pow_hash,
+        Some(pow_nonce) => std::str::from_utf8(pow_nonce.as_bytes())
+            .expect("invalid header utf8")
+            .parse::<u64>()
+            .expect("failed to get u64"),
         None => return StatusCode::BAD_REQUEST.into_response(),
-    }
-    .as_bytes()
-    .read_u64::<LittleEndian>()
-    .unwrap();
+    };
 
     let body = get_body(request.body_mut()).await;
 
     // validate pow
-    if !ProofOfWork::new(8).validate(&body, pow_hash, pow_nonce) {
+    if !ProofOfWork::new(8).validate(&body, &pow_hash, pow_nonce) {
         return StatusCode::UNAUTHORIZED.into_response();
     }
 
@@ -207,23 +220,23 @@ async fn key_create(
 
     // get pow headers
     let pow_hash = match headers.get("Self-Pow-Hash") {
-        Some(pow_hash) => pow_hash,
+        Some(pow_hash) => base64::decode_config(pow_hash.as_bytes(), URL_SAFE_NO_PAD)
+            .expect("failed to decode pow hash"),
         None => return StatusCode::BAD_REQUEST.into_response(),
-    }
-    .as_bytes();
+    };
 
     let pow_nonce = match headers.get("Self-Pow-Nonce") {
-        Some(pow_hash) => pow_hash,
+        Some(pow_nonce) => std::str::from_utf8(pow_nonce.as_bytes())
+            .expect("invalid header utf8")
+            .parse::<u64>()
+            .expect("failed to get u64"),
         None => return StatusCode::BAD_REQUEST.into_response(),
-    }
-    .as_bytes()
-    .read_u64::<LittleEndian>()
-    .unwrap();
+    };
 
     let body = get_body(request.body_mut()).await;
 
     // validate pow
-    if !ProofOfWork::new(8).validate(&body, pow_hash, pow_nonce) {
+    if !ProofOfWork::new(8).validate(&body, &pow_hash, pow_nonce) {
         return StatusCode::UNAUTHORIZED.into_response();
     }
 
@@ -250,45 +263,10 @@ async fn key_create(
 }
 
 #[debug_handler]
-async fn key_get(
-    Path(id): Path<String>,
-    State(state): State<Arc<Mutex<Datastore>>>,
-    mut request: Request<Body>,
-) -> Response {
-    let headers = request.headers().clone();
-
-    // get pow headers
-    let pow_hash = match headers.get("Self-Pow-Hash") {
-        Some(pow_hash) => pow_hash,
-        None => return StatusCode::BAD_REQUEST.into_response(),
-    }
-    .as_bytes();
-
-    let pow_nonce = match headers.get("Self-Pow-Nonce") {
-        Some(pow_hash) => pow_hash,
-        None => return StatusCode::BAD_REQUEST.into_response(),
-    }
-    .as_bytes()
-    .read_u64::<LittleEndian>()
-    .unwrap();
-
-    let body = get_body(request.body_mut()).await;
-
-    // validate pow
-    if !ProofOfWork::new(8).validate(&body, pow_hash, pow_nonce) {
-        return StatusCode::UNAUTHORIZED.into_response();
-    }
-
+async fn key_get(Path(id): Path<String>, State(state): State<Arc<Mutex<Datastore>>>) -> Response {
     let ds = state.lock().await;
 
-    let req_body: &[u8] = &body;
-
-    let req: KeyRequest = match ciborium::de::from_reader(req_body) {
-        Ok(req) => req,
-        Err(_) => return StatusCode::BAD_REQUEST.into_response(),
-    };
-
-    let identifier = Identifier::Referenced(req.identifier);
+    let identifier = Identifier::Referenced(hex::decode(id).expect("failed to decode identifier"));
 
     if !ds.keys.contains_key(&identifier) {
         return StatusCode::NOT_FOUND.into_response();
@@ -299,10 +277,10 @@ async fn key_get(
 
 #[debug_handler]
 async fn prekey_create(
-    Path(id): Path<String>,
     State(state): State<Arc<Mutex<Datastore>>>,
     mut request: Request<Body>,
 ) -> Response {
+    println!("creating prekey...");
     let headers = request.headers().clone();
     let body = get_body(request.body_mut()).await;
 
@@ -314,8 +292,6 @@ async fn prekey_create(
         Ok(req) => req,
         Err(_) => return StatusCode::BAD_REQUEST.into_response(),
     };
-
-    let identifier = Identifier::Referenced(hex::decode(id).expect("bad hex identifier"));
 
     // build a buffer containing the full request information
     // used for the authentication request and pow (optional)
@@ -352,9 +328,7 @@ async fn prekey_create(
         .verify(&req_details)
         .expect("authentication token verification failed");
 
-    if token.signer() != identifier {
-        return StatusCode::UNAUTHORIZED.into_response();
-    }
+    let identifier = token.signer();
 
     if !ds.keys.contains_key(&identifier) {
         return StatusCode::NOT_FOUND.into_response();
@@ -441,16 +415,20 @@ async fn prekey_get(
     } else {
         // or fallback to proof of work
         let pow_hash = match headers.get("Self-Pow-Hash") {
-            Some(pow_hash) => pow_hash.as_bytes(),
-            None => return StatusCode::UNAUTHORIZED.into_response(),
+            Some(pow_hash) => base64::decode_config(pow_hash.as_bytes(), URL_SAFE_NO_PAD)
+                .expect("failed to decode pow hash"),
+            None => return StatusCode::BAD_REQUEST.into_response(),
         };
 
         let pow_nonce = match headers.get("Self-Pow-Nonce") {
-            Some(pow_nonce) => pow_nonce.as_bytes().read_u64::<LittleEndian>().unwrap(),
-            None => return StatusCode::UNAUTHORIZED.into_response(),
+            Some(pow_nonce) => std::str::from_utf8(pow_nonce.as_bytes())
+                .expect("invalid header utf8")
+                .parse::<u64>()
+                .expect("failed to get u64"),
+            None => return StatusCode::BAD_REQUEST.into_response(),
         };
 
-        if !ProofOfWork::new(8).validate(&req_details, pow_hash, pow_nonce) {
+        if !ProofOfWork::new(8).validate(&req_details, &pow_hash, pow_nonce) {
             return StatusCode::UNAUTHORIZED.into_response();
         }
     }
