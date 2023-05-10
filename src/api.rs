@@ -288,25 +288,37 @@ async fn prekey_create(
 
     let req_body: &[u8] = &body;
 
+    println!("READING BODY");
     let req: Vec<Vec<u8>> = match ciborium::de::from_reader(req_body) {
         Ok(req) => req,
-        Err(_) => return StatusCode::BAD_REQUEST.into_response(),
+        Err(err) => {
+            println!("error!: {}", err);
+            return StatusCode::BAD_REQUEST.into_response();
+        }
     };
+
+    println!("HOST: {:?}", headers.get("Host"));
+    println!("URI: {}", request.uri());
 
     // build a buffer containing the full request information
     // used for the authentication request and pow (optional)
-    let req_scheme = request.uri().scheme_str().unwrap();
-    let req_host = request.uri().host().unwrap();
+    let req_method = request.method().as_str();
+    let req_scheme = "http://";
+    let req_host = headers.get("Host").unwrap().as_bytes();
     let req_path = request.uri().path_and_query().unwrap().as_str();
 
     let mut req_details =
-        vec![
-            0;
-            request.method().as_str().len() + req_scheme.len() + req_host.len() + req_path.len()
-        ];
-    req_details.copy_from_slice(req_scheme.as_bytes());
-    req_details[req_scheme.len()..].copy_from_slice(req_host.as_bytes());
-    req_details[req_scheme.len() + req_host.len()..].copy_from_slice(req_path.as_bytes());
+        vec![0; req_method.len() + req_scheme.len() + req_host.len() + req_path.len()];
+    req_details[..req_method.len()].copy_from_slice(req_method.as_bytes());
+    req_details[req_method.len()..req_method.len() + req_scheme.len()]
+        .copy_from_slice(req_scheme.as_bytes());
+    req_details
+        [req_method.len() + req_scheme.len()..req_method.len() + req_scheme.len() + req_host.len()]
+        .copy_from_slice(req_host);
+    req_details[req_method.len() + req_scheme.len() + req_host.len()..]
+        .copy_from_slice(req_path.as_bytes());
+
+    println!("GETTING AUTHENTICATION");
 
     // get authentication signature for the request
     let authentication = match headers.get("Self-Authentication") {
@@ -314,16 +326,19 @@ async fn prekey_create(
         None => return StatusCode::BAD_REQUEST.into_response(),
     };
 
+    println!("DECODE TOKEN");
     let token = match base64::decode_config(authentication.as_bytes(), base64::URL_SAFE_NO_PAD) {
         Ok(token) => token,
         Err(_) => return StatusCode::UNAUTHORIZED.into_response(),
     };
 
+    println!("TOKEN DECODE 2");
     let token = match Token::decode(&token).expect("invalid token encoding") {
         Token::Authentication(token) => token,
         _ => return StatusCode::BAD_REQUEST.into_response(),
     };
 
+    println!("TOKEN VERIFY");
     token
         .verify(&req_details)
         .expect("authentication token verification failed");
