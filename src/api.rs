@@ -303,6 +303,7 @@ async fn prekey_create(
     State(state): State<Arc<Mutex<Datastore>>>,
     mut request: Request<Body>,
 ) -> Response {
+    let headers = request.headers().clone();
     let body = get_body(request.body_mut()).await;
 
     let mut ds = state.lock().await;
@@ -315,6 +316,45 @@ async fn prekey_create(
     };
 
     let identifier = Identifier::Referenced(hex::decode(id).expect("bad hex identifier"));
+
+    // build a buffer containing the full request information
+    // used for the authentication request and pow (optional)
+    let req_scheme = request.uri().scheme_str().unwrap();
+    let req_host = request.uri().host().unwrap();
+    let req_path = request.uri().path_and_query().unwrap().as_str();
+
+    let mut req_details =
+        vec![
+            0;
+            request.method().as_str().len() + req_scheme.len() + req_host.len() + req_path.len()
+        ];
+    req_details.copy_from_slice(req_scheme.as_bytes());
+    req_details[req_scheme.len()..].copy_from_slice(req_host.as_bytes());
+    req_details[req_scheme.len() + req_host.len()..].copy_from_slice(req_path.as_bytes());
+
+    // get authentication signature for the request
+    let authentication = match headers.get("Self-Authentication") {
+        Some(authentication) => authentication,
+        None => return StatusCode::BAD_REQUEST.into_response(),
+    };
+
+    let token = match base64::decode_config(authentication.as_bytes(), base64::URL_SAFE_NO_PAD) {
+        Ok(token) => token,
+        Err(_) => return StatusCode::UNAUTHORIZED.into_response(),
+    };
+
+    let token = match Token::decode(&token).expect("invalid token encoding") {
+        Token::Authentication(token) => token,
+        _ => return StatusCode::BAD_REQUEST.into_response(),
+    };
+
+    token
+        .verify(&req_details)
+        .expect("authentication token verification failed");
+
+    if token.signer() != identifier {
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
 
     if !ds.keys.contains_key(&identifier) {
         return StatusCode::NOT_FOUND.into_response();
@@ -364,12 +404,12 @@ async fn prekey_get(
         None => return StatusCode::BAD_REQUEST.into_response(),
     };
 
-    let token = match base64::decode_config(&authentication.as_bytes(), base64::URL_SAFE_NO_PAD) {
+    let token = match base64::decode_config(authentication.as_bytes(), base64::URL_SAFE_NO_PAD) {
         Ok(token) => token,
         Err(_) => return StatusCode::UNAUTHORIZED.into_response(),
     };
 
-    let token = match Token::decode(&authentication.as_bytes()).expect("invalid token encoding") {
+    let token = match Token::decode(&token).expect("invalid token encoding") {
         Token::Authentication(token) => token,
         _ => return StatusCode::BAD_REQUEST.into_response(),
     };
@@ -380,14 +420,12 @@ async fn prekey_get(
 
     if let Some(authorization) = headers.get("Self-Authorization") {
         // check for an optional authorization token to authorize the request
-        let token = match base64::decode_config(&authorization.as_bytes(), base64::URL_SAFE_NO_PAD)
-        {
+        let token = match base64::decode_config(authorization.as_bytes(), base64::URL_SAFE_NO_PAD) {
             Ok(token) => token,
             Err(_) => return StatusCode::UNAUTHORIZED.into_response(),
         };
 
-        let token = match Token::decode(&authorization.as_bytes()).expect("invalid token encoding")
-        {
+        let token = match Token::decode(&token).expect("invalid token encoding") {
             Token::Authorization(token) => token,
             _ => return StatusCode::BAD_REQUEST.into_response(),
         };
