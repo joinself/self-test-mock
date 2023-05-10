@@ -1,7 +1,8 @@
 use crate::{
     datastore::Datastore, error::GenericError, identifier::Identifier, keypair::signing::PublicKey,
-    protocol::messaging,
+    protocol::messaging, token::Token,
 };
+
 use futures_util::{stream::SplitSink, SinkExt, StreamExt};
 use tokio::{
     io::{AsyncRead, AsyncWrite},
@@ -9,7 +10,6 @@ use tokio::{
     runtime::Runtime,
     sync::Mutex,
 };
-
 use tokio_tungstenite::{accept_async, tungstenite::protocol::Message, WebSocketStream};
 
 use std::sync::Arc;
@@ -176,6 +176,10 @@ async fn handle_subscribe(
     let subscribe =
         flatbuffers::root::<messaging::Subscribe>(content).expect("Subscribe event invalid");
 
+    if let Some(subs) = subscribe.subscriptions() {
+        println!("subscrions length: {}", subs.len());
+    }
+
     // setup subscriptions
     for subscription in subscribe
         .subscriptions()
@@ -186,13 +190,13 @@ async fn handle_subscribe(
         let signatures = subscription
             .signatures()
             .expect("Subscription signatures empty");
+        let signatures_len = signatures.len();
 
         let details = flatbuffers::root::<messaging::SubscriptionDetails>(details_buf)
             .expect("Subscription details invalid");
         let inbox = details.inbox().expect("Subscription inbox missing");
 
-        let (mut authenticated, mut authorized) = (false, false);
-        let mut subscriber: Option<&[u8]> = None;
+        let (mut authenticated_as, mut authorized_by, mut authorized_for) = (None, None, None);
 
         // validate the subscriptions signatures
         for signature in signatures {
@@ -211,41 +215,67 @@ async fn handle_subscribe(
                         .expect("Subscription signer invalid");
 
                     if !(pk.verify(&details_sig_buf, sig)) {
-                        return Err(GenericError::new("bad auth"));
+                        return Err(GenericError::new("bad authentication signature"));
                     };
 
-                    let identifier = Identifier::Referenced(inbox.to_vec());
-                    subscriptions.push(identifier);
-
+                    // if the signer is the inbox that a subscription is being requested for, then we can exit
                     if inbox == signer {
-                        (authenticated, authorized) = (true, true);
+                        (authenticated_as, authorized_by) =
+                            (Some(signer.to_vec()), Some(signer.to_vec()));
                         break;
                     }
 
-                    subscriber = Some(signer);
-                    authenticated = true;
+                    authenticated_as = Some(signer.to_vec());
                 }
-                messaging::SignatureType::SUBSCRIPTION => {
-                    let mut subscription_sig_buf = vec![0; 65];
-                    subscription_sig_buf[0] = messaging::SignatureType::SUBSCRIPTION.0 as u8;
-                    subscription_sig_buf[1..33].copy_from_slice(inbox);
-                    subscription_sig_buf[33..65]
-                        .copy_from_slice(subscriber.expect("Subscriber empty"));
-
-                    let pk = PublicKey::from_bytes(inbox, crate::keypair::Algorithm::Ed25519)
-                        .expect("Subscription signer invalid");
-
-                    if !pk.verify(&subscription_sig_buf, sig) {
-                        return Err(GenericError::new("bad auth"));
+                messaging::SignatureType::TOKEN => {
+                    let token = match Token::decode(sig) {
+                        Ok(token) => token,
+                        Err(_) => return Err(GenericError::new("bad token encoding")),
                     };
 
-                    authorized = true;
+                    match token {
+                        Token::Subscription(token) => {
+                            // TODO validate token if not handled by decoding step...
+                            // token.validate();
+
+                            (authorized_by, authorized_for) =
+                                (Some(token.signer().id()), Some(token.bearer().id()));
+                        }
+                        _ => return Err(GenericError::new("unsupported token type")),
+                    }
                 }
                 _ => continue, // skip other signature types for now
             }
         }
 
-        assert!(authenticated && authorized);
+        let authenticated_as = match authenticated_as {
+            Some(authenticated_as) => authenticated_as,
+            None => return Err(GenericError::new("unauthenticated subscription")),
+        };
+
+        let authorized_by = match authorized_by {
+            Some(authorized_by) => authorized_by,
+            None => return Err(GenericError::new("unauthorized subscription")),
+        };
+
+        if inbox != authorized_by {
+            return Err(GenericError::new("unauthorized subscription"));
+        }
+
+        if authenticated_as != authorized_by {
+            // if the authenticated user does not match the authorized user
+            // check the authorizing user has authorized the authenticated user
+            let authorized_for = match authorized_for {
+                Some(authorized_for) => authorized_for,
+                None => return Err(GenericError::new("unauthorized subscription")),
+            };
+
+            if authenticated_as != authorized_for {
+                return Err(GenericError::new("unauthorized subscription"));
+            }
+        }
+
+        subscriptions.push(Identifier::Referenced(authorized_by));
     }
 
     let mut ds = datastore.lock().await;

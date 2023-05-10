@@ -1,8 +1,9 @@
+use crate::crypto::pow::ProofOfWork;
 use crate::datastore::Datastore;
 use crate::identifier::Identifier;
-use crate::models::KeyRequest;
+use crate::models::{KeyRequest, PrekeyResponse};
 use crate::siggraph::SignatureGraph;
-use crate::{crypto::pow::ProofOfWork, models::PrekeyResponse};
+use crate::token::Token;
 
 use axum::{
     body::{Body, Bytes},
@@ -16,6 +17,7 @@ use axum::{
 use byteorder::{LittleEndian, ReadBytesExt};
 use ciborium::cbor;
 use tokio::sync::Mutex;
+use tower_http::trace::TraceLayer;
 
 use std::{collections::VecDeque, net::SocketAddr, sync::Arc};
 
@@ -32,15 +34,17 @@ pub fn test_api(
         .route("/v2/keys/:id", get(key_get))
         .route("/v2/prekeys/:id", post(prekey_create))
         .route("/v2/prekeys/:id", get(prekey_get))
+        .layer(TraceLayer::new_for_http())
         .with_state(datastore);
 
-    let addr = SocketAddr::from(([127, 0, 0, 1], port));
+    let addr = SocketAddr::from(([0, 0, 0, 0], port));
 
     let (con_tx, con_rx) = crossbeam::channel::bounded(1);
 
     let f = async move {
         let socket = axum::Server::bind(&addr);
         con_tx.send(()).unwrap();
+        println!("starting api on port {}...", port);
         socket
             .serve(app.into_make_service())
             .await
@@ -52,6 +56,8 @@ pub fn test_api(
     con_rx
         .recv_deadline(std::time::Instant::now() + std::time::Duration::from_secs(1))
         .expect("Server not ready");
+
+    std::thread::sleep(std::time::Duration::from_millis(200));
 }
 
 async fn identity_get(
@@ -78,6 +84,7 @@ async fn identity_create(
     State(state): State<Arc<Mutex<Datastore>>>,
     mut request: Request<Body>,
 ) -> Response {
+    println!("identity create...");
     let headers = request.headers().clone();
 
     // get pow headers
@@ -336,55 +343,78 @@ async fn prekey_get(
 
     let identifier = Identifier::Referenced(hex::decode(id).expect("bad hex identifier"));
 
-    if let Some(authorization) = headers.get("Authorization") {
-        // use auth token
-        let token =
-            match base64::decode_config(&authorization.as_bytes()[7..], base64::URL_SAFE_NO_PAD) {
-                Ok(token) => token,
-                Err(_) => return StatusCode::UNAUTHORIZED.into_response(),
-            };
+    // build a buffer containing the full request information
+    // used for the authentication request and pow (optional)
+    let req_scheme = request.uri().scheme_str().unwrap();
+    let req_host = request.uri().host().unwrap();
+    let req_path = request.uri().path_and_query().unwrap().as_str();
 
-        let authorized = match crate::token::validate(&token) {
-            Ok(authorized) => authorized,
+    let mut req_details =
+        vec![
+            0;
+            request.method().as_str().len() + req_scheme.len() + req_host.len() + req_path.len()
+        ];
+    req_details.copy_from_slice(req_scheme.as_bytes());
+    req_details[req_scheme.len()..].copy_from_slice(req_host.as_bytes());
+    req_details[req_scheme.len() + req_host.len()..].copy_from_slice(req_path.as_bytes());
+
+    // get authentication signature for the request
+    let authentication = match headers.get("Self-Authentication") {
+        Some(authentication) => authentication,
+        None => return StatusCode::BAD_REQUEST.into_response(),
+    };
+
+    let token = match base64::decode_config(&authentication.as_bytes(), base64::URL_SAFE_NO_PAD) {
+        Ok(token) => token,
+        Err(_) => return StatusCode::UNAUTHORIZED.into_response(),
+    };
+
+    let token = match Token::decode(&authentication.as_bytes()).expect("invalid token encoding") {
+        Token::Authentication(token) => token,
+        _ => return StatusCode::BAD_REQUEST.into_response(),
+    };
+
+    token
+        .verify(&req_details)
+        .expect("authentication token verification failed");
+
+    if let Some(authorization) = headers.get("Self-Authorization") {
+        // check for an optional authorization token to authorize the request
+        let token = match base64::decode_config(&authorization.as_bytes(), base64::URL_SAFE_NO_PAD)
+        {
+            Ok(token) => token,
             Err(_) => return StatusCode::UNAUTHORIZED.into_response(),
         };
 
-        let pow_hash = headers.get("Self-Pow-Hash");
-        let pow_nonce = headers.get("Self-Pow-Nonce");
+        let token = match Token::decode(&authorization.as_bytes()).expect("invalid token encoding")
+        {
+            Token::Authorization(token) => token,
+            _ => return StatusCode::BAD_REQUEST.into_response(),
+        };
 
-        if authorized.len() == 1 && pow_hash.is_some() && pow_nonce.is_some() {
-            let pow_hash = pow_hash.unwrap().as_bytes();
+        if token.signer() != identifier {
+            // this request has not been authorized by the correct identity
+            return StatusCode::BAD_REQUEST.into_response();
+        }
 
-            let pow_nonce = pow_nonce
-                .unwrap()
-                .as_bytes()
-                .read_u64::<LittleEndian>()
-                .unwrap();
+        token
+            .verify()
+            .expect("authorization token verification failed");
+    } else {
+        // or fallback to proof of work
+        let pow_hash = match headers.get("Self-Pow-Hash") {
+            Some(pow_hash) => pow_hash.as_bytes(),
+            None => return StatusCode::UNAUTHORIZED.into_response(),
+        };
 
-            let req_scheme = request.uri().scheme_str().unwrap();
-            let req_host = request.uri().host().unwrap();
-            let req_path = request.uri().path_and_query().unwrap().as_str();
+        let pow_nonce = match headers.get("Self-Pow-Nonce") {
+            Some(pow_nonce) => pow_nonce.as_bytes().read_u64::<LittleEndian>().unwrap(),
+            None => return StatusCode::UNAUTHORIZED.into_response(),
+        };
 
-            let mut req_pow = vec![
-                0;
-                32 + request.method().as_str().len()
-                    + req_scheme.len()
-                    + req_host.len()
-                    + req_path.len()
-            ];
-            req_pow.copy_from_slice(&authorized[0].id());
-            req_pow[32..].copy_from_slice(req_scheme.as_bytes());
-            req_pow[32 + req_scheme.len()..].copy_from_slice(req_host.as_bytes());
-            req_pow[32 + req_scheme.len() + req_host.len()..].copy_from_slice(req_path.as_bytes());
-
-            if !ProofOfWork::new(8).validate(&req_pow, pow_hash, pow_nonce) {
-                return StatusCode::UNAUTHORIZED.into_response();
-            }
-        } else if authorized.len() < 2 || authorized[1] != identifier {
+        if !ProofOfWork::new(8).validate(&req_details, pow_hash, pow_nonce) {
             return StatusCode::UNAUTHORIZED.into_response();
         }
-    } else {
-        return StatusCode::UNAUTHORIZED.into_response();
     }
 
     let mut ds = state.lock().await;

@@ -1,101 +1,100 @@
 namespace messaging;
 
 enum StatusCode : byte {
- BADAUTH     = 0,
- INBOXCLOSED = 1,
+  BADAUTH     = 0,
+  INBOXCLOSED = 1,
 }
 
 enum SignatureType : byte {
- AUTH         = 0, // signature over the sender's public key by recipient (authorizes the sender to send to a given inbox)
- PAYLOAD      = 1, // signature over payload (and recipient?)
- DELEGATION   = 2, // signature over the sender + recipient
- SUBSCRIPTION = 3, // signature over the subscriber (denoted by AUTH signature)
+  PAYLOAD = 0, // signature by the sender over payload
+  TOKEN   = 1, // token that authorizes the sender to a particular action, or delegates authority to them
 }
 
 // Signatures are always over [ SignatureType | ... ] where ... is the signature specific content
+// PAYLOAD signatures are a signature over the 
 table Signature {
- type:      SignatureType; // type of signature for authorization to send a message (one for authorization to send as a given sender, one to send as)
- signer:    [ubyte];       // optional, used for delegation certificates. will be a signature over only the sender and recipient values to give explicit consent to send on behalf of the delegating signer
- signature: [ubyte];       // signature over either [content (PAYLOAD), sender (AUTH), sender + recipient (DELEGATION)]
+  type:      SignatureType; // type of signature for authorization to send a message (one for authorization to send as a given sender, one to send as)
+  signer:    [ubyte];       // public key of signer, can be used for payload signtures used in conjunction with another token signature when the signer cannot be contextually inferred
+  signature: [ubyte];       // signature over either [content (PAYLOAD), authorizaiton (TOKEN)]
 }
 
 table Payload {
- sequence:  ulong;   // sequence number of message unique to sender -> recipient
- timestamp: long;    // timestamp when the sender constructed the message
- sender:    [ubyte]; // sender public key
- recipient: [ubyte]; // recipient public key
- content:   [ubyte]; // signed content, this can be the only thing persisted if space is a concern
+  sequence:  ulong;   // sequence number of message unique to sender -> recipient
+  timestamp: long;    // timestamp when the sender constructed the message
+  sender:    [ubyte]; // sender public key
+  recipient: [ubyte]; // recipient public key
+  content:   [ubyte]; // nessages content
 }
 
 table ProofOfWork {
- hash:  [ubyte]; // proof of work hash over the nonce + payload
- nonce: ulong;   // random nonce used only for pow
+  hash:  [ubyte]; // proof of work hash over the nonce + payload
+  nonce: ulong;   // random nonce used only for pow
 }
 
 table Message {
- payload:    [ubyte];     // message payload
- signatures: [Signature]; // signature of sender public key by recipient private key (auth/acl), signature of content by sender private key
- pow:        [ubyte];
+  payload:    [ubyte];     // message payload
+  signatures: [Signature]; // signature of sender public key by recipient private key (auth/acl), signature of content by sender private key
+  pow:        [ubyte];
 }
 
 table Acknowledgement {
 }
 
 table Error {
- code:  StatusCode; // a protocol defined error code
- error: [ubyte];    // a detailed error description
+  code:  StatusCode; // a protocol defined error code
+  error: [ubyte];    // a detailed error description
 }
 
 table SubscriptionDetails {
- inbox:  [ubyte]; // the recipients inbox to check for messages
- issued: long;    // issued timestamp of the subscription, must be within 10 seconds of server time
- from:   long;    // asks for all messages after a given timestamp (should be NTP time!)
+  inbox:  [ubyte]; // the recipients inbox to check for messages
+  issued: long;    // issued timestamp of the subscription, must be within 10 seconds of server time
+  from:   long;    // asks for all messages after a given timestamp (should be NTP time!)
 }
 
 table Subscription {
- details:    [ubyte];     // the details of the subscription
- signatures: [Signature]; // signature from the secret key component of the inboxes address over the subscription details
+  details:    [ubyte];     // the details of the subscription
+  signatures: [Signature]; // signature from the secret key component of the inboxes address over the subscription details
 }
 
 table Subscribe {
- subscriptions: [Subscription]; // contains the inboxes the client wants to subscribe to, with authorization
+  subscriptions: [Subscription]; // contains the inboxes the client wants to subscribe to, with authorization
 }
 
 table OpenDetails {
- inbox:  [ubyte]; // address of inbox
- nonce:  [ubyte]; // random nonce used to satisfy proof of work
- issued: long;    // timestamp of issue date
+  inbox:  [ubyte]; // address of inbox
+  nonce:  [ubyte]; // random nonce used to satisfy proof of work
+  issued: long;    // timestamp of issue date
 }
 
 table Open {
- details:   [ubyte];   // open details
- pow:       [ubyte];   // proof of work hash over details
- signature: Signature; // signature over details using inboxes secret key
+  details:   [ubyte];   // open details
+  pow:       [ubyte];   // proof of work hash over details
+  signature: Signature; // signature over details using inboxes secret key
 }
 
 table CloseDetails {
- inbox:  [ubyte]; // address of inbox
- issued: long;    // timestamp of issue date
+  inbox:  [ubyte]; // address of inbox
+  issued: long;    // timestamp of issue date
 }
 
 table Close {
- details:   [ubyte];   // close details
- signature: Signature; // signature over details using inboxes secret key
+  details:   [ubyte];   // close details
+  signature: Signature; // signature over details using inboxes secret key
 }
 
 enum ContentType : byte {
- ACKNOWLEDGEMENT = 0, // an acknowledgement for an event sent to the server
- ERROR           = 1, // an error for an event sent to the server
- SUBSCRIBE       = 2, // a subscription or subscriptions to different inboxes
- MESSAGE         = 3, // a message from or destined for an inbox
- OPEN            = 4, // opens an inbox
- CLOSE           = 5, // closes an inbox permanently
+  ACKNOWLEDGEMENT = 0, // an acknowledgement for an event sent to the server
+  ERROR           = 1, // an error for an event sent to the server
+  SUBSCRIBE       = 2, // a subscription or subscriptions to different inboxes
+  MESSAGE         = 3, // a message from or destined for an inbox
+  OPEN            = 4, // opens an inbox
+  CLOSE           = 5, // closes an inbox permanently
 }
 
 table Event {
- id:      [ubyte];     // 16 byte random id
- type:    ContentType; // the content of event
- content: [ubyte];     // event content [message, acknowledgement, error]
+  id:      [ubyte];     // 16 byte random id
+  type:    ContentType; // the content of event
+  content: [ubyte];     // event content [message, acknowledgement, error]
 }
 
 root_type Event;

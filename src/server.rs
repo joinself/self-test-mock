@@ -16,7 +16,6 @@ impl Server {
 
         api::test_api(&mut runtime, api_port, datastore.clone());
         messaging::test_messaging(&mut runtime, messaging_port, datastore.clone());
-
         Server { datastore, runtime }
     }
 }
@@ -26,6 +25,3 @@ impl Default for Server {
         Server::new(3000, 4000)
     }
 }
-
-#[cfg(test)]
-mod tests {}
