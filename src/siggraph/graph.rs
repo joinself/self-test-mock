@@ -43,7 +43,7 @@ impl SignatureGraph {
 
     pub fn signing_keys(&self) -> Vec<Vec<u8>> {
         let mut keys = Vec::new();
-        self.keys.borrow().into_iter().for_each(|(id, node)| {
+        self.keys.borrow().iter().for_each(|(id, node)| {
             if node.as_ref().borrow().typ == KeyRole::Signing {
                 keys.push(id.clone());
             }

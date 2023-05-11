@@ -1,8 +1,6 @@
 use crate::identifier::Identifier;
 use crate::{error::SelfError, keypair::signing::PublicKey};
 
-use byteorder::{LittleEndian, ReadBytesExt};
-use chrono::{TimeZone, Utc};
 use serde::{Deserialize, Serialize};
 
 const FLAG_DELEGATION_PERMIT: u8 = 1 << 1;
@@ -140,7 +138,7 @@ impl Authorization {
     }
 
     pub fn verify(&self) -> Result<(), SelfError> {
-        let pk = match self.token[34] {
+        let _pk = match self.token[34] {
             SIGNER_ALG_ED25519 => {
                 PublicKey::from_bytes(&self.signer().id(), crate::keypair::Algorithm::Ed25519)?
             }
