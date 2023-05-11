@@ -1,3 +1,5 @@
+#![allow(unknown_lints)]
+#![allow(clippy)]
 #![allow(unused_imports)]
 
 #[allow(clippy::module_inception)]

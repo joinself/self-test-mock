@@ -4,7 +4,6 @@ use crate::{
 };
 
 use futures_util::{stream::SplitSink, SinkExt, StreamExt};
-use hex::ToHex;
 use tokio::{
     io::{AsyncRead, AsyncWrite},
     net::{TcpListener, TcpStream},
@@ -191,13 +190,10 @@ async fn handle_subscribe(
         let signatures = subscription
             .signatures()
             .expect("Subscription signatures empty");
-        let signatures_len = signatures.len();
 
         let details = flatbuffers::root::<messaging::SubscriptionDetails>(details_buf)
             .expect("Subscription details invalid");
         let inbox = details.inbox().expect("Subscription inbox missing");
-
-        println!("inbox: {:?}", Identifier::Referenced(inbox.to_vec()));
 
         let (mut authenticated_as, mut authorized_by, mut authorized_for) = (None, None, None);
 

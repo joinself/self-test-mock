@@ -84,10 +84,7 @@ async fn identity_create(
     State(state): State<Arc<Mutex<Datastore>>>,
     mut request: Request<Body>,
 ) -> Response {
-    println!("identity create...");
     let headers = request.headers().clone();
-
-    println!("POW HASH");
 
     // get pow headers
     let pow_hash = match headers.get("Self-Pow-Hash") {
@@ -95,10 +92,6 @@ async fn identity_create(
             .expect("failed to decode pow hash"),
         None => return StatusCode::BAD_REQUEST.into_response(),
     };
-
-    println!("received hash: {:?}", pow_hash);
-
-    println!("POW NONCE");
 
     let pow_nonce = match headers.get("Self-Pow-Nonce") {
         Some(pow_nonce) => std::str::from_utf8(pow_nonce.as_bytes())
@@ -108,19 +101,12 @@ async fn identity_create(
         None => return StatusCode::BAD_REQUEST.into_response(),
     };
 
-    println!("nonce: {}", pow_nonce);
-
-    println!("GET BODY");
-
     let body = get_body(request.body_mut()).await;
-
-    println!("VALIDATE POW");
 
     // validate pow
     if !ProofOfWork::new(20).validate(&body, &pow_hash, pow_nonce) {
         return StatusCode::UNAUTHORIZED.into_response();
     }
-    println!("POW OK!");
 
     let mut ds = state.lock().await;
 
@@ -280,7 +266,6 @@ async fn prekey_create(
     State(state): State<Arc<Mutex<Datastore>>>,
     mut request: Request<Body>,
 ) -> Response {
-    println!("creating prekey...");
     let headers = request.headers().clone();
     let body = get_body(request.body_mut()).await;
 
@@ -288,7 +273,6 @@ async fn prekey_create(
 
     let req_body: &[u8] = &body;
 
-    println!("READING BODY");
     let req: Vec<Vec<u8>> = match ciborium::de::from_reader(req_body) {
         Ok(req) => req,
         Err(err) => {
@@ -296,9 +280,6 @@ async fn prekey_create(
             return StatusCode::BAD_REQUEST.into_response();
         }
     };
-
-    println!("HOST: {:?}", headers.get("Host"));
-    println!("URI: {}", request.uri());
 
     // build a buffer containing the full request information
     // used for the authentication request and pow (optional)
@@ -318,27 +299,22 @@ async fn prekey_create(
     req_details[req_method.len() + req_scheme.len() + req_host.len()..]
         .copy_from_slice(req_path.as_bytes());
 
-    println!("GETTING AUTHENTICATION");
-
     // get authentication signature for the request
     let authentication = match headers.get("Self-Authentication") {
         Some(authentication) => authentication,
         None => return StatusCode::BAD_REQUEST.into_response(),
     };
 
-    println!("DECODE TOKEN");
     let token = match base64::decode_config(authentication.as_bytes(), base64::URL_SAFE_NO_PAD) {
         Ok(token) => token,
         Err(_) => return StatusCode::UNAUTHORIZED.into_response(),
     };
 
-    println!("TOKEN DECODE 2");
     let token = match Token::decode(&token).expect("invalid token encoding") {
         Token::Authentication(token) => token,
         _ => return StatusCode::BAD_REQUEST.into_response(),
     };
 
-    println!("TOKEN VERIFY");
     token
         .verify(&req_details)
         .expect("authentication token verification failed");

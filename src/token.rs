@@ -118,7 +118,7 @@ impl Authentication {
         let token_len = self.token.len();
 
         let mut signed_data_buf = vec![0; (token_len - 64) + signed_data.len()];
-        signed_data_buf.copy_from_slice(&self.token[0..(token_len - 64)]);
+        signed_data_buf[0..token_len - 64].copy_from_slice(&self.token[0..(token_len - 64)]);
         signed_data_buf[(token_len - 64)..].copy_from_slice(signed_data);
 
         if !pk.verify(&signed_data_buf, &self.token[(token_len - 64)..]) {
