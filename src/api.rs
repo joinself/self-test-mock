@@ -17,7 +17,8 @@ use axum::{
 use base64::URL_SAFE_NO_PAD;
 use ciborium::cbor;
 use tokio::sync::Mutex;
-use tower_http::trace::TraceLayer;
+use tower_http::trace::{self, TraceLayer};
+use tracing::Level;
 
 use std::{collections::VecDeque, net::SocketAddr, sync::Arc};
 
@@ -26,7 +27,12 @@ pub fn test_api(
     port: u16,
     datastore: Arc<Mutex<Datastore>>,
 ) {
-    let app = Router::new()
+    tracing_subscriber::fmt()
+        .with_target(false)
+        .compact()
+        .init();
+
+    let mut app = Router::new()
         .route("/v2/identities", post(identity_create))
         .route("/v2/identities/:id", get(identity_get))
         .route("/v2/identities/:id/operations", post(operation_create))
@@ -34,8 +40,17 @@ pub fn test_api(
         .route("/v2/keys/:id", get(key_get))
         .route("/v2/prekeys", post(prekey_create))
         .route("/v2/prekeys/:id", get(prekey_get))
-        .layer(TraceLayer::new_for_http())
         .with_state(datastore);
+
+    if std::env::var("RUST_LOG").is_ok() {
+        app = app.layer(
+            TraceLayer::new_for_http()
+                .make_span_with(trace::DefaultMakeSpan::new().level(Level::INFO))
+                .on_failure(trace::DefaultOnFailure::new().level(Level::ERROR))
+                .on_request(trace::DefaultOnRequest::new().level(Level::INFO))
+                .on_response(trace::DefaultOnResponse::new().level(Level::INFO)),
+        );
+    }
 
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
 
@@ -44,7 +59,6 @@ pub fn test_api(
     let f = async move {
         let socket = axum::Server::bind(&addr);
         con_tx.send(()).unwrap();
-        println!("starting api on port {}...", port);
         socket
             .serve(app.into_make_service())
             .await

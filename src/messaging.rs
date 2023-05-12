@@ -102,6 +102,8 @@ where
                     } else if m.is_pong() {
                         println!("pong");
                     }
+                } else {
+                    break
                 }
             },
             message = write_rx.next() => {
@@ -115,7 +117,6 @@ where
     }
 
     // cleanup subscriptions...
-
     let mut ds = datastore.lock().await;
 
     for subscriber in subscriptions {
