@@ -177,10 +177,6 @@ async fn handle_subscribe(
     let subscribe =
         flatbuffers::root::<messaging::Subscribe>(content).expect("Subscribe event invalid");
 
-    if let Some(subs) = subscribe.subscriptions() {
-        println!("subscrions length: {}", subs.len());
-    }
-
     // setup subscriptions
     for subscription in subscribe
         .subscriptions()

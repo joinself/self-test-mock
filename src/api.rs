@@ -364,18 +364,21 @@ async fn prekey_get(
 
     // build a buffer containing the full request information
     // used for the authentication request and pow (optional)
-    let req_scheme = request.uri().scheme_str().unwrap();
-    let req_host = request.uri().host().unwrap();
+    let req_method = request.method().as_str();
+    let req_scheme = "http://";
+    let req_host = headers.get("Host").unwrap().as_bytes();
     let req_path = request.uri().path_and_query().unwrap().as_str();
 
     let mut req_details =
-        vec![
-            0;
-            request.method().as_str().len() + req_scheme.len() + req_host.len() + req_path.len()
-        ];
-    req_details.copy_from_slice(req_scheme.as_bytes());
-    req_details[req_scheme.len()..].copy_from_slice(req_host.as_bytes());
-    req_details[req_scheme.len() + req_host.len()..].copy_from_slice(req_path.as_bytes());
+        vec![0; req_method.len() + req_scheme.len() + req_host.len() + req_path.len()];
+    req_details[..req_method.len()].copy_from_slice(req_method.as_bytes());
+    req_details[req_method.len()..req_method.len() + req_scheme.len()]
+        .copy_from_slice(req_scheme.as_bytes());
+    req_details
+        [req_method.len() + req_scheme.len()..req_method.len() + req_scheme.len() + req_host.len()]
+        .copy_from_slice(req_host);
+    req_details[req_method.len() + req_scheme.len() + req_host.len()..]
+        .copy_from_slice(req_path.as_bytes());
 
     // get authentication signature for the request
     let authentication = match headers.get("Self-Authentication") {
