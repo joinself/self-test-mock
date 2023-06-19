@@ -4,7 +4,7 @@ pub fn blake2b(data: &[u8]) -> Vec<u8> {
     unsafe {
         sodium_sys::crypto_generichash(
             h.as_mut_ptr(),
-            sodium_sys::crypto_generichash_BYTES as u64,
+            sodium_sys::crypto_generichash_BYTES as usize,
             data.as_ptr(),
             data.len() as u64,
             std::ptr::null(),
