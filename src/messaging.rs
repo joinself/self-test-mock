@@ -310,6 +310,7 @@ where
         &mut builder,
         &messaging::EventArgs {
             id: Some(id),
+            version: messaging::Version::V1,
             type_: messaging::ContentType::ACKNOWLEDGEMENT,
             content: None,
         },
@@ -350,6 +351,7 @@ where
         &mut builder,
         &messaging::EventArgs {
             id: Some(id),
+            version: messaging::Version::V1,
             type_: messaging::ContentType::ACKNOWLEDGEMENT,
             content: Some(content),
         },

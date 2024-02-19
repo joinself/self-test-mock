@@ -1,6 +1,11 @@
 namespace messaging;
 
-enum StatusCode : byte {
+enum Version : ubyte {
+  Unknown = 0,
+  V1      = 1,
+}
+
+enum StatusCode : ubyte {
   BADAUTH     = 0,
   INBOXCLOSED = 1,
 }
@@ -92,6 +97,7 @@ enum ContentType : byte {
 }
 
 table Event {
+  version: Version;     // the events version
   id:      [ubyte];     // 16 byte random id
   type:    ContentType; // the content of event
   content: [ubyte];     // event content [message, acknowledgement, error]
