@@ -1,6 +1,6 @@
 use crate::{
-    datastore::Datastore, error::GenericError, identifier::Identifier, keypair::signing::PublicKey,
-    protocol::messaging, token::Token,
+    datastore::Datastore, error::GenericError, keypair::signing::PublicKey, protocol::messaging,
+    token::Token,
 };
 
 use futures_util::{stream::SplitSink, SinkExt, StreamExt};

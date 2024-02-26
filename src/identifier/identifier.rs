@@ -8,7 +8,6 @@ use hex::ToHex;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use std::fmt;
-use std::io::Read;
 
 #[derive(Clone)]
 pub enum Identifier {

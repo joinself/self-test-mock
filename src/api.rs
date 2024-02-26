@@ -327,7 +327,7 @@ impl Api for ApiHandler {
 
     async fn notify(
         &self,
-        request: Request<api::Request>,
+        _request: Request<api::Request>,
     ) -> Result<Response<api::Response>, Status> {
         let reply = api::Response {
             header: Some(api::ResponseHeader {
@@ -343,7 +343,7 @@ impl Api for ApiHandler {
 
     async fn challenge(
         &self,
-        request: Request<api::Request>,
+        _request: Request<api::Request>,
     ) -> Result<Response<api::Response>, Status> {
         let reply = api::Response {
             header: Some(api::ResponseHeader {
@@ -359,7 +359,7 @@ impl Api for ApiHandler {
 
     async fn verify_app_publisher(
         &self,
-        request: Request<api::Request>,
+        _request: Request<api::Request>,
     ) -> Result<Response<api::Response>, Status> {
         let reply = api::Response {
             header: Some(api::ResponseHeader {
