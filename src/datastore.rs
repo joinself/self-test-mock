@@ -7,11 +7,11 @@ use std::collections::{HashMap, VecDeque};
 type Subscription = (Vec<u8>, async_channel::Sender<Message>);
 
 pub struct Datastore {
-    pub identities: HashMap<Identifier, Vec<Vec<u8>>>,
-    pub keys: HashMap<Identifier, Option<Identifier>>,
-    pub messages: HashMap<Identifier, Vec<Vec<u8>>>,
-    pub prekeys: HashMap<Identifier, VecDeque<Vec<u8>>>,
-    pub subscribers: HashMap<Identifier, Vec<Subscription>>,
+    pub identities: HashMap<Vec<u8>, Vec<Vec<u8>>>,
+    pub keys: HashMap<Vec<u8>, Option<Identifier>>,
+    pub messages: HashMap<Vec<u8>, Vec<Vec<u8>>>,
+    pub one_time_keys: HashMap<Vec<u8>, VecDeque<Vec<u8>>>,
+    pub subscribers: HashMap<Vec<u8>, Vec<Subscription>>,
 }
 
 impl Datastore {
@@ -20,7 +20,7 @@ impl Datastore {
             identities: HashMap::new(),
             keys: HashMap::new(),
             messages: HashMap::new(),
-            prekeys: HashMap::new(),
+            one_time_keys: HashMap::new(),
             subscribers: HashMap::new(),
         }
     }

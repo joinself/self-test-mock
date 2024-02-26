@@ -1,0 +1,83 @@
+namespace hashgraph;
+
+enum Version : ubyte {
+    V0 = 0,
+}
+
+enum Method : ushort {
+    Aure = 0,
+    Key,
+}
+
+// defines what role the embedded or referenced controller or key has
+enum Role : ulong (bit_flags) {
+    Verification = 0,
+    Assertion,
+    Authentication,
+    Delegation,
+    Invocation,
+    KeyAgreement,
+}
+
+// defines an embedded description of a key
+table Embedded {
+    id: [ubyte];
+    controller: [ubyte];
+}
+
+// defines a referenced description of another key or did
+table Reference {
+    method: Method;
+    id: [ubyte];
+    controller: [ubyte];
+}
+
+union Description {
+    Embedded,
+    Reference,
+}
+
+enum Actionable : ubyte { 
+    Grant = 0,
+    Revoke,
+    Modify,
+    Recover,
+    Deactivate,
+}
+
+table Action {
+    actionable: Actionable;
+    description: Description;
+    roles: ulong;
+    from: long;
+}
+
+// defines an operation actioned at a given time with a collection of actions that it executes
+table Operation {
+    version: Version;
+    sequence: uint;
+    previous: [ubyte];
+    timestamp: long;
+    actions: [Action];
+}
+
+// defines details about a signature, such as the ed25519 public key identifier of the signer
+table SignatureHeader {
+    signer: [ubyte];
+}
+
+// defines an ed25519 signature and headers for an operation
+table Signature {
+    header: [ubyte];
+    signature: [ubyte];
+}
+
+// defines an operation and its signatures.
+// signatures are computed over a sha3-256 hash of the operation concatonated with the sha3-256 hash of the signatures header
+// signature( sha3(operation) + sha3(header))
+table SignedOperation {
+    operation: [ubyte];
+    signatures: [Signature];
+}
+
+root_type SignedOperation;

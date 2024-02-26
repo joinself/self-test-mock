@@ -146,17 +146,15 @@ async fn handle_message(
     // TODO validate message authentication and authorization
     if let Some(recipient) = payload.recipient() {
         let mut ds = datastore.lock().await;
-        let identifier = Identifier::Referenced(recipient.to_vec());
-
         // If the inbox exists, push the message
-        if let Some(inbox) = ds.messages.get_mut(&identifier) {
+        if let Some(inbox) = ds.messages.get_mut(recipient) {
             inbox.push(data.to_vec());
         } else {
             return Err(GenericError::new("recipient inbox not found"));
         };
 
         // if there are subscribers, forward them the messages
-        if let Some(subscribers) = ds.subscribers.get_mut(&identifier) {
+        if let Some(subscribers) = ds.subscribers.get_mut(recipient) {
             for (_, sub) in subscribers {
                 sub.send(Message::Binary(data.to_vec()))
                     .await
@@ -171,7 +169,7 @@ async fn handle_subscribe(
     content: &[u8],
     write_tx: async_channel::Sender<Message>,
     connection_id: &[u8],
-    subscriptions: &mut Vec<Identifier>,
+    subscriptions: &mut Vec<Vec<u8>>,
     datastore: &Arc<Mutex<Datastore>>,
 ) -> Result<(), GenericError> {
     let subscribe =
@@ -271,7 +269,7 @@ async fn handle_subscribe(
             }
         }
 
-        subscriptions.push(Identifier::Referenced(authorized_by));
+        subscriptions.push(authorized_by);
     }
 
     let mut ds = datastore.lock().await;

@@ -18,13 +18,19 @@ hex = "0.4.3"
 hyper = "0.14.26"
 libc = "0.2"
 ntp = "0.5.0"
+prost = { version = "0.12" }
 rand = "0.8.5"
 rand_chacha = "0.3.1"
 serde = { version = "1.0.147", features = ["derive"] }
+sha3 = "0.10.8"
 sodium_sys = { git = "https://github.com/joinself/sodium-sys" }
 tokio = { version = "1.23.0", features = ["full", "macros"] }
 tokio-tungstenite = { version = "0.18.0", features = ["rustls-tls-native-roots"] }
+tonic = "0.11"
 tower-http = {version = "0.4.0", features = ["full"] }
 tracing = "0.1.37"
 tracing-subscriber = "0.3.17"
 tungstenite = "0.18.0"
+
+[build-dependencies]
+tonic-build = "0.11"

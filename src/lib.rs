@@ -2,14 +2,13 @@ mod api;
 mod crypto;
 mod datastore;
 mod error;
+mod hashgraph;
 mod identifier;
 mod keypair;
 mod message;
 mod messaging;
-mod models;
 mod protocol;
 pub mod server;
-mod siggraph;
 mod time;
 mod token;
 

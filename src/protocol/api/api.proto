@@ -1,0 +1,234 @@
+syntax = "proto3";
+package api;
+option go_package = "github.com/joinself/self-next/common/protocol/rpc/api";
+
+service Api {
+  // Resolves an identity by it's identifier
+  rpc Resolve (Request) returns (Response) {}
+  // Resolves an identities DID Document by it's identifier
+  rpc ResolveDocument (Request) returns (Response) {}
+  // Execute executes an operation and adds it to an identities log
+  rpc Execute (Request) returns (Response) {}
+  // Acquire a one time keys for a given device
+  rpc Acquire (Request) returns (Response) {}
+  // Publish a collection of one time keys
+  rpc Publish (Request) returns (Response) {}
+  // List lists all one time keys
+  rpc List (Request) returns (Response) {}
+  // Purge purges all one time keys
+  rpc Purge (Request) returns (Response) {}
+  // Notify notidies a device using rhe encrypted push token they have shared
+  rpc Notify(Request) returns (Response) {}
+  // Requests a unique signed challenge
+  rpc Challenge(Request) returns (Response) {}
+  // Verifies a platform attestation and returns a credential linking the app install to a self publisher identifier
+  rpc VerifyAppPublisher(Request) returns (Response) {}
+}
+
+enum Version {
+  V1 = 0;
+}
+
+enum ResponseStatus {
+  StatusUnknown               = 0;
+  StatusOK                    = 200; // RFC 9110, 15.3.1
+  StatusCreated               = 201; // RFC 9110, 15.3.2
+  StatusAccepted              = 202; // RFC 9110, 15.3.3
+  StatusNoContent             = 204; // RFC 9110, 15.3.5
+  StatusBadRequest            = 400; // RFC 9110, 15.5.1
+  StatusUnauthorized          = 401; // RFC 9110, 15.5.2
+  StatusPaymentRequired       = 402; // RFC 9110, 15.5.3
+  StatusForbidden             = 403; // RFC 9110, 15.5.4
+  StatusNotFound              = 404; // RFC 9110, 15.5.5
+  StatusMethodNotAllowed      = 405; // RFC 9110, 15.5.6
+  StatusNotAcceptable         = 406; // RFC 9110, 15.5.7
+  StatusRequestTimeout        = 408; // RFC 9110, 15.5.9
+  StatusConflict              = 409; // RFC 9110, 15.5.10
+  StatusGone                  = 410; // RFC 9110, 15.5.11
+  StatusLengthRequired        = 411; // RFC 9110, 15.5.12
+  StatusPreconditionFailed    = 412; // RFC 9110, 15.5.13
+  StatusRequestEntityTooLarge = 413; // RFC 9110, 15.5.14
+  StatusExpectationFailed     = 417; // RFC 9110, 15.5.18
+  StatusInternalServerError   = 500; // RFC 9110, 15.6.1
+  StatusNotImplemented        = 501; // RFC 9110, 15.6.2
+  StatusBadGateway            = 502; // RFC 9110, 15.6.3
+  StatusServiceUnavailable    = 503; // RFC 9110, 15.6.4
+  StatusGatewayTimeout        = 504; // RFC 9110, 15.6.5
+}
+
+enum Platform {
+  IOS     = 0;
+  Android = 1;
+}
+
+message Object {
+  string link = 1;
+  bytes  key = 2; 
+}
+
+enum NotifyPriority {
+  NORMAL = 0;
+  URGENT = 1;
+  VOIP   = 2;
+}
+
+message Authorization {
+  bytes token = 1;
+}
+
+message ProofOfWork {
+  bytes  hash = 1;
+  uint64 nonce = 2;
+}
+
+message RequestHeader {
+  Version version = 1;
+}
+
+message Request {
+  RequestHeader header = 1;
+  Authorization authorization = 2;
+  ProofOfWork   proof_of_work = 3;
+  bytes         content = 4;
+}
+
+message ResponseHeader {
+  Version        version = 1;
+  ResponseStatus status = 2;
+  string         message = 3;
+}
+
+message Response {
+  ResponseHeader header = 1;
+  bytes content = 2;
+}
+
+message AttestationDeviceCheck {
+  bytes challenge = 1;
+  bytes token = 2;
+  bytes key_id = 3;
+}
+
+message AttestationPlayIntegrity {
+  bytes challenge = 1;
+  bytes token = 2;
+}
+
+message ResolveRequest {
+  bytes  id = 1;
+  uint32 from = 2;
+}
+
+message ResolveResponse {
+  repeated bytes log = 1;
+}
+
+message ResolveDocumentRequest {
+  bytes id = 1;
+  int64 version = 2;
+}
+
+message ResolveDocumentResponse {
+  bytes document = 1;
+}
+
+message ExecuteRequest {
+  bytes id = 1;
+  bytes operation = 2;
+}
+  
+message ExecuteResponse {
+}
+
+message AcquireRequest {
+  bytes id = 1;
+  bytes by = 2;
+}
+
+message AcquireResponse {
+  bytes key = 1;
+}
+
+message PublishRequest {
+  bytes          id = 1;
+  repeated bytes keys = 2;
+}
+
+message PublishResponse {
+}
+
+message ListRequest {
+  bytes  id = 1;
+  uint32 from = 2;
+}
+
+message ListResponse {
+  repeated bytes keys = 1;
+}
+  
+message PurgeRequest {
+  bytes id = 1;
+}
+	
+message PurgeResponse {
+}
+
+message NotifyRequest {
+  NotifyPriority priority = 1;
+  bytes token = 2;
+  bytes payload = 3;
+}
+	
+message NotifyResponse {
+}
+
+message ChallengeRequest {
+}
+
+message ChallengeResponse {
+  bytes challenge = 1;
+}
+
+message VerifyAppPublisherRequest {
+  Platform platform = 1;
+  bytes    attestation = 2;
+}
+
+message VerifyAppPublisherResponse {
+  repeated bytes credentials = 1;
+}
+
+message VerifyPassportRequest {
+  Platform       platform = 1;
+  bytes          attestation = 2;
+  repeated bytes datagroups = 3;
+  Object         liveness_image = 4;
+}
+
+message VerifyPassportResponse {
+  repeated bytes credentials = 1;
+}
+
+message VerifyLivenessRequest {
+  Platform platform = 1;
+  bytes    attestation = 2;
+  bytes    passport_credential = 3;
+  Object   passport_image = 4;
+  Object   liveness_image = 5;
+}
+
+message VerifyLivenessResponse {
+  repeated bytes credentials = 1;
+}
+
+message VerifyProfileImageRequest {
+  Platform platform = 1;
+  bytes    attestation = 2;
+  bytes    passport_credential = 3;
+  Object   passport_image = 4;
+  Object   liveness_image = 5;
+}
+
+message VerifyProfileImageResponse {
+  repeated bytes credentials = 1;
+}
