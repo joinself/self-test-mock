@@ -1,4 +1,3 @@
-mod api;
 mod crypto;
 mod datastore;
 mod error;
@@ -8,6 +7,7 @@ mod keypair;
 mod message;
 mod messaging;
 mod protocol;
+mod rpc;
 pub mod server;
 mod time;
 mod token;

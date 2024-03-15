@@ -1,8 +1,8 @@
 use crate::crypto::pow::ProofOfWork;
 use crate::datastore::Datastore;
-use crate::protocol::api;
-use crate::protocol::api::api_server::{Api, ApiServer};
-use crate::protocol::api::{
+use crate::protocol::rpc;
+use crate::protocol::rpc::api_server::{Api, ApiServer};
+use crate::protocol::rpc::{
     AcquireRequest, AcquireResponse, ExecuteRequest, ListRequest, ListResponse, PublishRequest,
     PurgeRequest, ResolveRequest, ResolveResponse,
 };
@@ -45,8 +45,8 @@ impl ApiHandler {
 impl Api for ApiHandler {
     async fn resolve(
         &self,
-        request: Request<api::Request>,
-    ) -> Result<Response<api::Response>, Status> {
+        request: Request<rpc::Request>,
+    ) -> Result<Response<rpc::Response>, Status> {
         let payload = request.into_inner();
 
         let resolve = match ResolveRequest::decode(payload.content.as_ref()) {
@@ -69,10 +69,10 @@ impl Api for ApiHandler {
             return Err(Status::internal("internal server error"));
         };
 
-        let reply = api::Response {
-            header: Some(api::ResponseHeader {
-                version: api::Version::V1 as i32,
-                status: api::ResponseStatus::StatusAccepted as i32,
+        let reply = rpc::Response {
+            header: Some(rpc::ResponseHeader {
+                version: rpc::Version::V1 as i32,
+                status: rpc::ResponseStatus::StatusAccepted as i32,
                 message: String::new(),
             }),
             content,
@@ -83,12 +83,12 @@ impl Api for ApiHandler {
 
     async fn resolve_document(
         &self,
-        _request: Request<api::Request>,
-    ) -> Result<Response<api::Response>, Status> {
-        let reply = api::Response {
-            header: Some(api::ResponseHeader {
-                version: api::Version::V1 as i32,
-                status: api::ResponseStatus::StatusAccepted as i32,
+        _request: Request<rpc::Request>,
+    ) -> Result<Response<rpc::Response>, Status> {
+        let reply = rpc::Response {
+            header: Some(rpc::ResponseHeader {
+                version: rpc::Version::V1 as i32,
+                status: rpc::ResponseStatus::StatusAccepted as i32,
                 message: String::new(),
             }),
             content: vec![0; 0],
@@ -99,8 +99,8 @@ impl Api for ApiHandler {
 
     async fn execute(
         &self,
-        request: Request<api::Request>,
-    ) -> Result<Response<api::Response>, Status> {
+        request: Request<rpc::Request>,
+    ) -> Result<Response<rpc::Response>, Status> {
         let payload = request.into_inner();
 
         if let Some(pow) = payload.proof_of_work {
@@ -122,10 +122,10 @@ impl Api for ApiHandler {
             .identities
             .insert(execute.id, vec![execute.operation]);
 
-        let reply = api::Response {
-            header: Some(api::ResponseHeader {
-                version: api::Version::V1 as i32,
-                status: api::ResponseStatus::StatusAccepted as i32,
+        let reply = rpc::Response {
+            header: Some(rpc::ResponseHeader {
+                version: rpc::Version::V1 as i32,
+                status: rpc::ResponseStatus::StatusAccepted as i32,
                 message: String::new(),
             }),
             content: vec![0; 0],
@@ -136,8 +136,8 @@ impl Api for ApiHandler {
 
     async fn acquire(
         &self,
-        request: Request<api::Request>,
-    ) -> Result<Response<api::Response>, Status> {
+        request: Request<rpc::Request>,
+    ) -> Result<Response<rpc::Response>, Status> {
         let payload = request.into_inner();
 
         if let Some(pow) = payload.proof_of_work {
@@ -173,10 +173,10 @@ impl Api for ApiHandler {
             return Err(Status::internal("internal server error"));
         };
 
-        let reply = api::Response {
-            header: Some(api::ResponseHeader {
-                version: api::Version::V1 as i32,
-                status: api::ResponseStatus::StatusAccepted as i32,
+        let reply = rpc::Response {
+            header: Some(rpc::ResponseHeader {
+                version: rpc::Version::V1 as i32,
+                status: rpc::ResponseStatus::StatusAccepted as i32,
                 message: String::new(),
             }),
             content,
@@ -187,8 +187,8 @@ impl Api for ApiHandler {
 
     async fn publish(
         &self,
-        request: Request<api::Request>,
-    ) -> Result<Response<api::Response>, Status> {
+        request: Request<rpc::Request>,
+    ) -> Result<Response<rpc::Response>, Status> {
         let payload = request.into_inner();
 
         if let Some(pow) = payload.proof_of_work {
@@ -221,10 +221,10 @@ impl Api for ApiHandler {
 
         publish.keys.into_iter().for_each(|pk| queue.push_back(pk));
 
-        let reply = api::Response {
-            header: Some(api::ResponseHeader {
-                version: api::Version::V1 as i32,
-                status: api::ResponseStatus::StatusAccepted as i32,
+        let reply = rpc::Response {
+            header: Some(rpc::ResponseHeader {
+                version: rpc::Version::V1 as i32,
+                status: rpc::ResponseStatus::StatusAccepted as i32,
                 message: String::new(),
             }),
             content: Vec::new(),
@@ -235,8 +235,8 @@ impl Api for ApiHandler {
 
     async fn list(
         &self,
-        request: Request<api::Request>,
-    ) -> Result<Response<api::Response>, Status> {
+        request: Request<rpc::Request>,
+    ) -> Result<Response<rpc::Response>, Status> {
         let payload = request.into_inner();
 
         // TODO authenticate request
@@ -272,10 +272,10 @@ impl Api for ApiHandler {
             return Err(Status::internal("internal server error"));
         };
 
-        let reply = api::Response {
-            header: Some(api::ResponseHeader {
-                version: api::Version::V1 as i32,
-                status: api::ResponseStatus::StatusAccepted as i32,
+        let reply = rpc::Response {
+            header: Some(rpc::ResponseHeader {
+                version: rpc::Version::V1 as i32,
+                status: rpc::ResponseStatus::StatusAccepted as i32,
                 message: String::new(),
             }),
             content,
@@ -286,8 +286,8 @@ impl Api for ApiHandler {
 
     async fn purge(
         &self,
-        request: Request<api::Request>,
-    ) -> Result<Response<api::Response>, Status> {
+        request: Request<rpc::Request>,
+    ) -> Result<Response<rpc::Response>, Status> {
         let payload = request.into_inner();
 
         // TODO authenticate request
@@ -313,10 +313,10 @@ impl Api for ApiHandler {
         }
         .clear();
 
-        let reply = api::Response {
-            header: Some(api::ResponseHeader {
-                version: api::Version::V1 as i32,
-                status: api::ResponseStatus::StatusAccepted as i32,
+        let reply = rpc::Response {
+            header: Some(rpc::ResponseHeader {
+                version: rpc::Version::V1 as i32,
+                status: rpc::ResponseStatus::StatusAccepted as i32,
                 message: String::new(),
             }),
             content: Vec::new(),
@@ -327,12 +327,12 @@ impl Api for ApiHandler {
 
     async fn notify(
         &self,
-        _request: Request<api::Request>,
-    ) -> Result<Response<api::Response>, Status> {
-        let reply = api::Response {
-            header: Some(api::ResponseHeader {
-                version: api::Version::V1 as i32,
-                status: api::ResponseStatus::StatusAccepted as i32,
+        _request: Request<rpc::Request>,
+    ) -> Result<Response<rpc::Response>, Status> {
+        let reply = rpc::Response {
+            header: Some(rpc::ResponseHeader {
+                version: rpc::Version::V1 as i32,
+                status: rpc::ResponseStatus::StatusAccepted as i32,
                 message: String::new(),
             }),
             content: vec![0; 0],
@@ -343,12 +343,12 @@ impl Api for ApiHandler {
 
     async fn challenge(
         &self,
-        _request: Request<api::Request>,
-    ) -> Result<Response<api::Response>, Status> {
-        let reply = api::Response {
-            header: Some(api::ResponseHeader {
-                version: api::Version::V1 as i32,
-                status: api::ResponseStatus::StatusAccepted as i32,
+        _request: Request<rpc::Request>,
+    ) -> Result<Response<rpc::Response>, Status> {
+        let reply = rpc::Response {
+            header: Some(rpc::ResponseHeader {
+                version: rpc::Version::V1 as i32,
+                status: rpc::ResponseStatus::StatusAccepted as i32,
                 message: String::new(),
             }),
             content: vec![0; 0],
@@ -359,12 +359,12 @@ impl Api for ApiHandler {
 
     async fn verify_app_publisher(
         &self,
-        _request: Request<api::Request>,
-    ) -> Result<Response<api::Response>, Status> {
-        let reply = api::Response {
-            header: Some(api::ResponseHeader {
-                version: api::Version::V1 as i32,
-                status: api::ResponseStatus::StatusAccepted as i32,
+        _request: Request<rpc::Request>,
+    ) -> Result<Response<rpc::Response>, Status> {
+        let reply = rpc::Response {
+            header: Some(rpc::ResponseHeader {
+                version: rpc::Version::V1 as i32,
+                status: rpc::ResponseStatus::StatusAccepted as i32,
                 message: String::new(),
             }),
             content: vec![0; 0],

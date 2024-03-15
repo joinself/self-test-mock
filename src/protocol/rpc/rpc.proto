@@ -1,6 +1,5 @@
 syntax = "proto3";
-package api;
-option go_package = "github.com/joinself/self-next/common/protocol/rpc/api";
+package rpc;
 
 service Api {
   // Resolves an identity by it's identifier
@@ -168,6 +167,7 @@ message ListResponse {
   
 message PurgeRequest {
   bytes id = 1;
+  bytes operation = 2;
 }
 	
 message PurgeResponse {

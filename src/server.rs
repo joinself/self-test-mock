@@ -1,4 +1,4 @@
-use crate::{api, datastore::Datastore, messaging};
+use crate::{datastore::Datastore, messaging, rpc};
 
 use tokio::{runtime::Runtime, sync::Mutex};
 
@@ -14,7 +14,7 @@ impl Server {
         let datastore = Arc::new(Mutex::new(Datastore::new()));
         let mut runtime = tokio::runtime::Runtime::new().expect("failed to start tokio runtime");
 
-        api::test_api(&mut runtime, api_port, datastore.clone());
+        rpc::test_api(&mut runtime, api_port, datastore.clone());
         messaging::test_messaging(&mut runtime, messaging_port, datastore.clone());
         Server { datastore, runtime }
     }
