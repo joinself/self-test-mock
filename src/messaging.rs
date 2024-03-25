@@ -69,7 +69,7 @@ where
                         let content = event.content().expect("Event content missing");
 
                         match event.type_() {
-                            messaging::ContentType::MESSAGE => {
+                            messaging::EventType::MESSAGE => {
                                 match handle_message(&data, content, &datastore).await {
                                     Ok(_) => ack(&mut socket_tx, event.id().unwrap()).await,
                                     Err(ge) => {
@@ -78,7 +78,7 @@ where
                                     },
                                 }
                             },
-                            messaging::ContentType::SUBSCRIBE => {
+                            messaging::EventType::SUBSCRIBE => {
                                 match handle_subscribe(content, write_tx.clone(), &connection_id, &mut subscriptions, &datastore).await {
                                     Ok(_) => ack(&mut socket_tx, event.id().unwrap()).await,
                                     Err(ge) => {
@@ -87,10 +87,10 @@ where
                                     },
                                 }
                             },
-                            messaging::ContentType::OPEN => {
+                            messaging::EventType::OPEN => {
 
                             },
-                            messaging::ContentType::CLOSE => {
+                            messaging::EventType::CLOSE => {
 
                             },
                             _ => {
@@ -309,7 +309,7 @@ where
         &messaging::EventArgs {
             id: Some(id),
             version: messaging::Version::V1,
-            type_: messaging::ContentType::ACKNOWLEDGEMENT,
+            type_: messaging::EventType::ACKNOWLEDGEMENT,
             content: None,
         },
     );
@@ -350,7 +350,7 @@ where
         &messaging::EventArgs {
             id: Some(id),
             version: messaging::Version::V1,
-            type_: messaging::ContentType::ACKNOWLEDGEMENT,
+            type_: messaging::EventType::ACKNOWLEDGEMENT,
             content: Some(content),
         },
     );

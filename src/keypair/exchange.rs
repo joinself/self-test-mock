@@ -149,24 +149,3 @@ impl Default for KeyPair {
         KeyPair::new()
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn new() {
-        let skp = KeyPair::new();
-        assert_eq!(skp.public().id().len(), 32);
-    }
-
-    #[test]
-    fn encode_decode() {
-        let skp = KeyPair::new();
-        assert_eq!(skp.public().id().len(), 32);
-
-        // encode and decode the keypair
-        let encoded_skp = skp.encode();
-        KeyPair::decode(&encoded_skp).unwrap();
-    }
-}

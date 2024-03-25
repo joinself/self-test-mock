@@ -5,7 +5,15 @@ enum Version : ubyte {
   V1      = 1,
 }
 
-enum StatusCode : ubyte {
+enum ContentType : byte {
+  MLS_COMMIT      = 0, // an MLS commit message that updates the group's membership
+  MLS_WELCOME     = 1, // an MLS welcome message that invites the recipient to a group
+  MLS_MESSAGE     = 2, // an MLS group message
+  MLS_PROPOSAL    = 3, // an MLS proposal message to propose updates the group's membership
+  MLS_KEY_PACKAGE = 4, // an MLS key package message to initiate creating a group with the recipient
+}
+
+enum StatusCode : byte {
   BADAUTH     = 0,
   INBOXCLOSED = 1,
 }
@@ -20,15 +28,16 @@ enum SignatureType : byte {
 table Signature {
   type:      SignatureType; // type of signature for authorization to send a message (one for authorization to send as a given sender, one to send as)
   signer:    [ubyte];       // public key of signer, can be used for payload signtures used in conjunction with another token signature when the signer cannot be contextually inferred
-  signature: [ubyte];       // signature over either [content (PAYLOAD), authorizaiton (TOKEN)]
+  signature: [ubyte];       // [signature over content (PAYLOAD), or an authorization token (TOKEN)]
 }
 
 table Payload {
-  sequence:  ulong;   // sequence number of message unique to sender -> recipient
-  timestamp: long;    // timestamp when the sender constructed the message
-  sender:    [ubyte]; // sender public key
-  recipient: [ubyte]; // recipient public key
-  content:   [ubyte]; // nessages content
+  type:      ContentType; // the type of payload
+  sequence:  ulong;       // sequence number of message unique to sender -> recipient
+  timestamp: long;        // timestamp when the sender constructed the message
+  sender:    [ubyte];     // sender public key
+  recipient: [ubyte];     // recipient public key
+  content:   [ubyte];     // nessages content
 }
 
 table ProofOfWork {
@@ -40,6 +49,31 @@ table Message {
   payload:    [ubyte];     // message payload
   signatures: [Signature]; // signature of sender public key by recipient private key (auth/acl), signature of content by sender private key
   pow:        [ubyte];
+}
+
+table MlsCommit {
+  commit: [ubyte]; // an MLS commit message
+}
+
+table MlsWelcome {
+  welcome:      [ubyte]; // an MLS welcome message
+  send:         [ubyte]; // a send token to permit the recipient to send to the group's address
+  subscription: [ubyte]; // a subcription token to permit the recipient to subscribe to the group's address
+}
+
+table MlsKeyPackage {
+  package:      [ubyte]; // an MLS welcome message
+  send:         [ubyte]; // a send token to permit the recipient to send to the key package issuer's address
+  push:         [ubyte]; // a temporary notification token to permit the recipient to send a push notification to the users device
+}
+
+table MlsMessage {
+  message: [ubyte]; // an MLS encrypted message
+}
+
+table MlsProposal {
+  proposal:     [ubyte]; // an MLS proposal 
+  push:         [ubyte]; // an optional, temporary notification token that allows a group member to notify it if they can prove the group has delegated access to them
 }
 
 table Acknowledgement {
@@ -67,13 +101,13 @@ table Subscribe {
 
 table OpenDetails {
   inbox:  [ubyte]; // address of inbox
-  nonce:  [ubyte]; // random nonce used to satisfy proof of work
   issued: long;    // timestamp of issue date
 }
 
 table Open {
   details:   [ubyte];   // open details
   pow:       [ubyte];   // proof of work hash over details
+  nonce:     ulong;     // random nonce used to satisfy proof of work
   signature: Signature; // signature over details using inboxes secret key
 }
 
@@ -87,7 +121,7 @@ table Close {
   signature: Signature; // signature over details using inboxes secret key
 }
 
-enum ContentType : byte {
+enum EventType : byte {
   ACKNOWLEDGEMENT = 0, // an acknowledgement for an event sent to the server
   ERROR           = 1, // an error for an event sent to the server
   SUBSCRIBE       = 2, // a subscription or subscriptions to different inboxes
@@ -99,7 +133,7 @@ enum ContentType : byte {
 table Event {
   version: Version;     // the events version
   id:      [ubyte];     // 16 byte random id
-  type:    ContentType; // the content of event
+  type:    EventType;   // the type of event
   content: [ubyte];     // event content [message, acknowledgement, error]
 }
 

@@ -110,12 +110,121 @@ pub mod messaging {
         since = "2.0.0",
         note = "Use associated constants instead. This will no longer be generated in 2021."
     )]
-    pub const ENUM_MIN_STATUS_CODE: u8 = 0;
+    pub const ENUM_MIN_CONTENT_TYPE: i8 = 0;
     #[deprecated(
         since = "2.0.0",
         note = "Use associated constants instead. This will no longer be generated in 2021."
     )]
-    pub const ENUM_MAX_STATUS_CODE: u8 = 1;
+    pub const ENUM_MAX_CONTENT_TYPE: i8 = 4;
+    #[deprecated(
+        since = "2.0.0",
+        note = "Use associated constants instead. This will no longer be generated in 2021."
+    )]
+    #[allow(non_camel_case_types)]
+    pub const ENUM_VALUES_CONTENT_TYPE: [ContentType; 5] = [
+        ContentType::MLS_COMMIT,
+        ContentType::MLS_WELCOME,
+        ContentType::MLS_MESSAGE,
+        ContentType::MLS_PROPOSAL,
+        ContentType::MLS_KEY_PACKAGE,
+    ];
+
+    #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+    #[repr(transparent)]
+    pub struct ContentType(pub i8);
+    #[allow(non_upper_case_globals)]
+    impl ContentType {
+        pub const MLS_COMMIT: Self = Self(0);
+        pub const MLS_WELCOME: Self = Self(1);
+        pub const MLS_MESSAGE: Self = Self(2);
+        pub const MLS_PROPOSAL: Self = Self(3);
+        pub const MLS_KEY_PACKAGE: Self = Self(4);
+
+        pub const ENUM_MIN: i8 = 0;
+        pub const ENUM_MAX: i8 = 4;
+        pub const ENUM_VALUES: &'static [Self] = &[
+            Self::MLS_COMMIT,
+            Self::MLS_WELCOME,
+            Self::MLS_MESSAGE,
+            Self::MLS_PROPOSAL,
+            Self::MLS_KEY_PACKAGE,
+        ];
+        /// Returns the variant's name or "" if unknown.
+        pub fn variant_name(self) -> Option<&'static str> {
+            match self {
+                Self::MLS_COMMIT => Some("MLS_COMMIT"),
+                Self::MLS_WELCOME => Some("MLS_WELCOME"),
+                Self::MLS_MESSAGE => Some("MLS_MESSAGE"),
+                Self::MLS_PROPOSAL => Some("MLS_PROPOSAL"),
+                Self::MLS_KEY_PACKAGE => Some("MLS_KEY_PACKAGE"),
+                _ => None,
+            }
+        }
+    }
+    impl std::fmt::Debug for ContentType {
+        fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            if let Some(name) = self.variant_name() {
+                f.write_str(name)
+            } else {
+                f.write_fmt(format_args!("<UNKNOWN {:?}>", self.0))
+            }
+        }
+    }
+    impl<'a> flatbuffers::Follow<'a> for ContentType {
+        type Inner = Self;
+        #[inline]
+        fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+            let b = unsafe { flatbuffers::read_scalar_at::<i8>(buf, loc) };
+            Self(b)
+        }
+    }
+
+    impl flatbuffers::Push for ContentType {
+        type Output = ContentType;
+        #[inline]
+        fn push(&self, dst: &mut [u8], _rest: &[u8]) {
+            unsafe {
+                flatbuffers::emplace_scalar::<i8>(dst, self.0);
+            }
+        }
+    }
+
+    impl flatbuffers::EndianScalar for ContentType {
+        #[inline]
+        fn to_little_endian(self) -> Self {
+            let b = i8::to_le(self.0);
+            Self(b)
+        }
+        #[inline]
+        #[allow(clippy::wrong_self_convention)]
+        fn from_little_endian(self) -> Self {
+            let b = i8::from_le(self.0);
+            Self(b)
+        }
+    }
+
+    impl<'a> flatbuffers::Verifiable for ContentType {
+        #[inline]
+        fn run_verifier(
+            v: &mut flatbuffers::Verifier,
+            pos: usize,
+        ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+            use self::flatbuffers::Verifiable;
+            i8::run_verifier(v, pos)
+        }
+    }
+
+    impl flatbuffers::SimpleToVerifyInSlice for ContentType {}
+    #[deprecated(
+        since = "2.0.0",
+        note = "Use associated constants instead. This will no longer be generated in 2021."
+    )]
+    pub const ENUM_MIN_STATUS_CODE: i8 = 0;
+    #[deprecated(
+        since = "2.0.0",
+        note = "Use associated constants instead. This will no longer be generated in 2021."
+    )]
+    pub const ENUM_MAX_STATUS_CODE: i8 = 1;
     #[deprecated(
         since = "2.0.0",
         note = "Use associated constants instead. This will no longer be generated in 2021."
@@ -126,14 +235,14 @@ pub mod messaging {
 
     #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
     #[repr(transparent)]
-    pub struct StatusCode(pub u8);
+    pub struct StatusCode(pub i8);
     #[allow(non_upper_case_globals)]
     impl StatusCode {
         pub const BADAUTH: Self = Self(0);
         pub const INBOXCLOSED: Self = Self(1);
 
-        pub const ENUM_MIN: u8 = 0;
-        pub const ENUM_MAX: u8 = 1;
+        pub const ENUM_MIN: i8 = 0;
+        pub const ENUM_MAX: i8 = 1;
         pub const ENUM_VALUES: &'static [Self] = &[Self::BADAUTH, Self::INBOXCLOSED];
         /// Returns the variant's name or "" if unknown.
         pub fn variant_name(self) -> Option<&'static str> {
@@ -157,7 +266,7 @@ pub mod messaging {
         type Inner = Self;
         #[inline]
         fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
-            let b = unsafe { flatbuffers::read_scalar_at::<u8>(buf, loc) };
+            let b = unsafe { flatbuffers::read_scalar_at::<i8>(buf, loc) };
             Self(b)
         }
     }
@@ -167,7 +276,7 @@ pub mod messaging {
         #[inline]
         fn push(&self, dst: &mut [u8], _rest: &[u8]) {
             unsafe {
-                flatbuffers::emplace_scalar::<u8>(dst, self.0);
+                flatbuffers::emplace_scalar::<i8>(dst, self.0);
             }
         }
     }
@@ -175,13 +284,13 @@ pub mod messaging {
     impl flatbuffers::EndianScalar for StatusCode {
         #[inline]
         fn to_little_endian(self) -> Self {
-            let b = u8::to_le(self.0);
+            let b = i8::to_le(self.0);
             Self(b)
         }
         #[inline]
         #[allow(clippy::wrong_self_convention)]
         fn from_little_endian(self) -> Self {
-            let b = u8::from_le(self.0);
+            let b = i8::from_le(self.0);
             Self(b)
         }
     }
@@ -193,7 +302,7 @@ pub mod messaging {
             pos: usize,
         ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
             use self::flatbuffers::Verifiable;
-            u8::run_verifier(v, pos)
+            i8::run_verifier(v, pos)
         }
     }
 
@@ -294,31 +403,31 @@ pub mod messaging {
         since = "2.0.0",
         note = "Use associated constants instead. This will no longer be generated in 2021."
     )]
-    pub const ENUM_MIN_CONTENT_TYPE: i8 = 0;
+    pub const ENUM_MIN_EVENT_TYPE: i8 = 0;
     #[deprecated(
         since = "2.0.0",
         note = "Use associated constants instead. This will no longer be generated in 2021."
     )]
-    pub const ENUM_MAX_CONTENT_TYPE: i8 = 5;
+    pub const ENUM_MAX_EVENT_TYPE: i8 = 5;
     #[deprecated(
         since = "2.0.0",
         note = "Use associated constants instead. This will no longer be generated in 2021."
     )]
     #[allow(non_camel_case_types)]
-    pub const ENUM_VALUES_CONTENT_TYPE: [ContentType; 6] = [
-        ContentType::ACKNOWLEDGEMENT,
-        ContentType::ERROR,
-        ContentType::SUBSCRIBE,
-        ContentType::MESSAGE,
-        ContentType::OPEN,
-        ContentType::CLOSE,
+    pub const ENUM_VALUES_EVENT_TYPE: [EventType; 6] = [
+        EventType::ACKNOWLEDGEMENT,
+        EventType::ERROR,
+        EventType::SUBSCRIBE,
+        EventType::MESSAGE,
+        EventType::OPEN,
+        EventType::CLOSE,
     ];
 
     #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
     #[repr(transparent)]
-    pub struct ContentType(pub i8);
+    pub struct EventType(pub i8);
     #[allow(non_upper_case_globals)]
-    impl ContentType {
+    impl EventType {
         pub const ACKNOWLEDGEMENT: Self = Self(0);
         pub const ERROR: Self = Self(1);
         pub const SUBSCRIBE: Self = Self(2);
@@ -349,7 +458,7 @@ pub mod messaging {
             }
         }
     }
-    impl std::fmt::Debug for ContentType {
+    impl std::fmt::Debug for EventType {
         fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
             if let Some(name) = self.variant_name() {
                 f.write_str(name)
@@ -358,7 +467,7 @@ pub mod messaging {
             }
         }
     }
-    impl<'a> flatbuffers::Follow<'a> for ContentType {
+    impl<'a> flatbuffers::Follow<'a> for EventType {
         type Inner = Self;
         #[inline]
         fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
@@ -367,8 +476,8 @@ pub mod messaging {
         }
     }
 
-    impl flatbuffers::Push for ContentType {
-        type Output = ContentType;
+    impl flatbuffers::Push for EventType {
+        type Output = EventType;
         #[inline]
         fn push(&self, dst: &mut [u8], _rest: &[u8]) {
             unsafe {
@@ -377,7 +486,7 @@ pub mod messaging {
         }
     }
 
-    impl flatbuffers::EndianScalar for ContentType {
+    impl flatbuffers::EndianScalar for EventType {
         #[inline]
         fn to_little_endian(self) -> Self {
             let b = i8::to_le(self.0);
@@ -391,7 +500,7 @@ pub mod messaging {
         }
     }
 
-    impl<'a> flatbuffers::Verifiable for ContentType {
+    impl<'a> flatbuffers::Verifiable for EventType {
         #[inline]
         fn run_verifier(
             v: &mut flatbuffers::Verifier,
@@ -402,7 +511,7 @@ pub mod messaging {
         }
     }
 
-    impl flatbuffers::SimpleToVerifyInSlice for ContentType {}
+    impl flatbuffers::SimpleToVerifyInSlice for EventType {}
     pub enum SignatureOffset {}
     #[derive(Copy, Clone, PartialEq)]
 
@@ -598,15 +707,23 @@ pub mod messaging {
             if let Some(x) = args.sender {
                 builder.add_sender(x);
             }
+            builder.add_type_(args.type_);
             builder.finish()
         }
 
-        pub const VT_SEQUENCE: flatbuffers::VOffsetT = 4;
-        pub const VT_TIMESTAMP: flatbuffers::VOffsetT = 6;
-        pub const VT_SENDER: flatbuffers::VOffsetT = 8;
-        pub const VT_RECIPIENT: flatbuffers::VOffsetT = 10;
-        pub const VT_CONTENT: flatbuffers::VOffsetT = 12;
+        pub const VT_TYPE_: flatbuffers::VOffsetT = 4;
+        pub const VT_SEQUENCE: flatbuffers::VOffsetT = 6;
+        pub const VT_TIMESTAMP: flatbuffers::VOffsetT = 8;
+        pub const VT_SENDER: flatbuffers::VOffsetT = 10;
+        pub const VT_RECIPIENT: flatbuffers::VOffsetT = 12;
+        pub const VT_CONTENT: flatbuffers::VOffsetT = 14;
 
+        #[inline]
+        pub fn type_(&self) -> ContentType {
+            self._tab
+                .get::<ContentType>(Payload::VT_TYPE_, Some(ContentType::MLS_COMMIT))
+                .unwrap()
+        }
         #[inline]
         pub fn sequence(&self) -> u64 {
             self._tab.get::<u64>(Payload::VT_SEQUENCE, Some(0)).unwrap()
@@ -654,6 +771,7 @@ pub mod messaging {
         ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
             use self::flatbuffers::Verifiable;
             v.visit_table(pos)?
+                .visit_field::<ContentType>(&"type_", Self::VT_TYPE_, false)?
                 .visit_field::<u64>(&"sequence", Self::VT_SEQUENCE, false)?
                 .visit_field::<i64>(&"timestamp", Self::VT_TIMESTAMP, false)?
                 .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, u8>>>(
@@ -676,6 +794,7 @@ pub mod messaging {
         }
     }
     pub struct PayloadArgs<'a> {
+        pub type_: ContentType,
         pub sequence: u64,
         pub timestamp: i64,
         pub sender: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u8>>>,
@@ -686,6 +805,7 @@ pub mod messaging {
         #[inline]
         fn default() -> Self {
             PayloadArgs {
+                type_: ContentType::MLS_COMMIT,
                 sequence: 0,
                 timestamp: 0,
                 sender: None,
@@ -699,6 +819,11 @@ pub mod messaging {
         start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
     }
     impl<'a: 'b, 'b> PayloadBuilder<'a, 'b> {
+        #[inline]
+        pub fn add_type_(&mut self, type_: ContentType) {
+            self.fbb_
+                .push_slot::<ContentType>(Payload::VT_TYPE_, type_, ContentType::MLS_COMMIT);
+        }
         #[inline]
         pub fn add_sequence(&mut self, sequence: u64) {
             self.fbb_
@@ -748,6 +873,7 @@ pub mod messaging {
     impl std::fmt::Debug for Payload<'_> {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             let mut ds = f.debug_struct("Payload");
+            ds.field("type_", &self.type_());
             ds.field("sequence", &self.sequence());
             ds.field("timestamp", &self.timestamp());
             ds.field("sender", &self.sender());
@@ -1044,6 +1170,686 @@ pub mod messaging {
             ds.field("payload", &self.payload());
             ds.field("signatures", &self.signatures());
             ds.field("pow", &self.pow());
+            ds.finish()
+        }
+    }
+    pub enum MlsCommitOffset {}
+    #[derive(Copy, Clone, PartialEq)]
+
+    pub struct MlsCommit<'a> {
+        pub _tab: flatbuffers::Table<'a>,
+    }
+
+    impl<'a> flatbuffers::Follow<'a> for MlsCommit<'a> {
+        type Inner = MlsCommit<'a>;
+        #[inline]
+        fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+            Self {
+                _tab: flatbuffers::Table { buf, loc },
+            }
+        }
+    }
+
+    impl<'a> MlsCommit<'a> {
+        #[inline]
+        pub fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+            MlsCommit { _tab: table }
+        }
+        #[allow(unused_mut)]
+        pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
+            _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
+            args: &'args MlsCommitArgs<'args>,
+        ) -> flatbuffers::WIPOffset<MlsCommit<'bldr>> {
+            let mut builder = MlsCommitBuilder::new(_fbb);
+            if let Some(x) = args.commit {
+                builder.add_commit(x);
+            }
+            builder.finish()
+        }
+
+        pub const VT_COMMIT: flatbuffers::VOffsetT = 4;
+
+        #[inline]
+        pub fn commit(&self) -> Option<&'a [u8]> {
+            self._tab
+                .get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u8>>>(
+                    MlsCommit::VT_COMMIT,
+                    None,
+                )
+                .map(|v| v.safe_slice())
+        }
+    }
+
+    impl flatbuffers::Verifiable for MlsCommit<'_> {
+        #[inline]
+        fn run_verifier(
+            v: &mut flatbuffers::Verifier,
+            pos: usize,
+        ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+            use self::flatbuffers::Verifiable;
+            v.visit_table(pos)?
+                .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, u8>>>(
+                    &"commit",
+                    Self::VT_COMMIT,
+                    false,
+                )?
+                .finish();
+            Ok(())
+        }
+    }
+    pub struct MlsCommitArgs<'a> {
+        pub commit: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u8>>>,
+    }
+    impl<'a> Default for MlsCommitArgs<'a> {
+        #[inline]
+        fn default() -> Self {
+            MlsCommitArgs { commit: None }
+        }
+    }
+    pub struct MlsCommitBuilder<'a: 'b, 'b> {
+        fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+        start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+    }
+    impl<'a: 'b, 'b> MlsCommitBuilder<'a, 'b> {
+        #[inline]
+        pub fn add_commit(&mut self, commit: flatbuffers::WIPOffset<flatbuffers::Vector<'b, u8>>) {
+            self.fbb_
+                .push_slot_always::<flatbuffers::WIPOffset<_>>(MlsCommit::VT_COMMIT, commit);
+        }
+        #[inline]
+        pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> MlsCommitBuilder<'a, 'b> {
+            let start = _fbb.start_table();
+            MlsCommitBuilder {
+                fbb_: _fbb,
+                start_: start,
+            }
+        }
+        #[inline]
+        pub fn finish(self) -> flatbuffers::WIPOffset<MlsCommit<'a>> {
+            let o = self.fbb_.end_table(self.start_);
+            flatbuffers::WIPOffset::new(o.value())
+        }
+    }
+
+    impl std::fmt::Debug for MlsCommit<'_> {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            let mut ds = f.debug_struct("MlsCommit");
+            ds.field("commit", &self.commit());
+            ds.finish()
+        }
+    }
+    pub enum MlsWelcomeOffset {}
+    #[derive(Copy, Clone, PartialEq)]
+
+    pub struct MlsWelcome<'a> {
+        pub _tab: flatbuffers::Table<'a>,
+    }
+
+    impl<'a> flatbuffers::Follow<'a> for MlsWelcome<'a> {
+        type Inner = MlsWelcome<'a>;
+        #[inline]
+        fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+            Self {
+                _tab: flatbuffers::Table { buf, loc },
+            }
+        }
+    }
+
+    impl<'a> MlsWelcome<'a> {
+        #[inline]
+        pub fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+            MlsWelcome { _tab: table }
+        }
+        #[allow(unused_mut)]
+        pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
+            _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
+            args: &'args MlsWelcomeArgs<'args>,
+        ) -> flatbuffers::WIPOffset<MlsWelcome<'bldr>> {
+            let mut builder = MlsWelcomeBuilder::new(_fbb);
+            if let Some(x) = args.subscription {
+                builder.add_subscription(x);
+            }
+            if let Some(x) = args.send {
+                builder.add_send(x);
+            }
+            if let Some(x) = args.welcome {
+                builder.add_welcome(x);
+            }
+            builder.finish()
+        }
+
+        pub const VT_WELCOME: flatbuffers::VOffsetT = 4;
+        pub const VT_SEND: flatbuffers::VOffsetT = 6;
+        pub const VT_SUBSCRIPTION: flatbuffers::VOffsetT = 8;
+
+        #[inline]
+        pub fn welcome(&self) -> Option<&'a [u8]> {
+            self._tab
+                .get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u8>>>(
+                    MlsWelcome::VT_WELCOME,
+                    None,
+                )
+                .map(|v| v.safe_slice())
+        }
+        #[inline]
+        pub fn send(&self) -> Option<&'a [u8]> {
+            self._tab
+                .get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u8>>>(
+                    MlsWelcome::VT_SEND,
+                    None,
+                )
+                .map(|v| v.safe_slice())
+        }
+        #[inline]
+        pub fn subscription(&self) -> Option<&'a [u8]> {
+            self._tab
+                .get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u8>>>(
+                    MlsWelcome::VT_SUBSCRIPTION,
+                    None,
+                )
+                .map(|v| v.safe_slice())
+        }
+    }
+
+    impl flatbuffers::Verifiable for MlsWelcome<'_> {
+        #[inline]
+        fn run_verifier(
+            v: &mut flatbuffers::Verifier,
+            pos: usize,
+        ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+            use self::flatbuffers::Verifiable;
+            v.visit_table(pos)?
+                .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, u8>>>(
+                    &"welcome",
+                    Self::VT_WELCOME,
+                    false,
+                )?
+                .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, u8>>>(
+                    &"send",
+                    Self::VT_SEND,
+                    false,
+                )?
+                .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, u8>>>(
+                    &"subscription",
+                    Self::VT_SUBSCRIPTION,
+                    false,
+                )?
+                .finish();
+            Ok(())
+        }
+    }
+    pub struct MlsWelcomeArgs<'a> {
+        pub welcome: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u8>>>,
+        pub send: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u8>>>,
+        pub subscription: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u8>>>,
+    }
+    impl<'a> Default for MlsWelcomeArgs<'a> {
+        #[inline]
+        fn default() -> Self {
+            MlsWelcomeArgs {
+                welcome: None,
+                send: None,
+                subscription: None,
+            }
+        }
+    }
+    pub struct MlsWelcomeBuilder<'a: 'b, 'b> {
+        fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+        start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+    }
+    impl<'a: 'b, 'b> MlsWelcomeBuilder<'a, 'b> {
+        #[inline]
+        pub fn add_welcome(
+            &mut self,
+            welcome: flatbuffers::WIPOffset<flatbuffers::Vector<'b, u8>>,
+        ) {
+            self.fbb_
+                .push_slot_always::<flatbuffers::WIPOffset<_>>(MlsWelcome::VT_WELCOME, welcome);
+        }
+        #[inline]
+        pub fn add_send(&mut self, send: flatbuffers::WIPOffset<flatbuffers::Vector<'b, u8>>) {
+            self.fbb_
+                .push_slot_always::<flatbuffers::WIPOffset<_>>(MlsWelcome::VT_SEND, send);
+        }
+        #[inline]
+        pub fn add_subscription(
+            &mut self,
+            subscription: flatbuffers::WIPOffset<flatbuffers::Vector<'b, u8>>,
+        ) {
+            self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(
+                MlsWelcome::VT_SUBSCRIPTION,
+                subscription,
+            );
+        }
+        #[inline]
+        pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> MlsWelcomeBuilder<'a, 'b> {
+            let start = _fbb.start_table();
+            MlsWelcomeBuilder {
+                fbb_: _fbb,
+                start_: start,
+            }
+        }
+        #[inline]
+        pub fn finish(self) -> flatbuffers::WIPOffset<MlsWelcome<'a>> {
+            let o = self.fbb_.end_table(self.start_);
+            flatbuffers::WIPOffset::new(o.value())
+        }
+    }
+
+    impl std::fmt::Debug for MlsWelcome<'_> {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            let mut ds = f.debug_struct("MlsWelcome");
+            ds.field("welcome", &self.welcome());
+            ds.field("send", &self.send());
+            ds.field("subscription", &self.subscription());
+            ds.finish()
+        }
+    }
+    pub enum MlsKeyPackageOffset {}
+    #[derive(Copy, Clone, PartialEq)]
+
+    pub struct MlsKeyPackage<'a> {
+        pub _tab: flatbuffers::Table<'a>,
+    }
+
+    impl<'a> flatbuffers::Follow<'a> for MlsKeyPackage<'a> {
+        type Inner = MlsKeyPackage<'a>;
+        #[inline]
+        fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+            Self {
+                _tab: flatbuffers::Table { buf, loc },
+            }
+        }
+    }
+
+    impl<'a> MlsKeyPackage<'a> {
+        #[inline]
+        pub fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+            MlsKeyPackage { _tab: table }
+        }
+        #[allow(unused_mut)]
+        pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
+            _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
+            args: &'args MlsKeyPackageArgs<'args>,
+        ) -> flatbuffers::WIPOffset<MlsKeyPackage<'bldr>> {
+            let mut builder = MlsKeyPackageBuilder::new(_fbb);
+            if let Some(x) = args.push_ {
+                builder.add_push_(x);
+            }
+            if let Some(x) = args.send {
+                builder.add_send(x);
+            }
+            if let Some(x) = args.package {
+                builder.add_package(x);
+            }
+            builder.finish()
+        }
+
+        pub const VT_PACKAGE: flatbuffers::VOffsetT = 4;
+        pub const VT_SEND: flatbuffers::VOffsetT = 6;
+        pub const VT_PUSH_: flatbuffers::VOffsetT = 8;
+
+        #[inline]
+        pub fn package(&self) -> Option<&'a [u8]> {
+            self._tab
+                .get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u8>>>(
+                    MlsKeyPackage::VT_PACKAGE,
+                    None,
+                )
+                .map(|v| v.safe_slice())
+        }
+        #[inline]
+        pub fn send(&self) -> Option<&'a [u8]> {
+            self._tab
+                .get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u8>>>(
+                    MlsKeyPackage::VT_SEND,
+                    None,
+                )
+                .map(|v| v.safe_slice())
+        }
+        #[inline]
+        pub fn push_(&self) -> Option<&'a [u8]> {
+            self._tab
+                .get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u8>>>(
+                    MlsKeyPackage::VT_PUSH_,
+                    None,
+                )
+                .map(|v| v.safe_slice())
+        }
+    }
+
+    impl flatbuffers::Verifiable for MlsKeyPackage<'_> {
+        #[inline]
+        fn run_verifier(
+            v: &mut flatbuffers::Verifier,
+            pos: usize,
+        ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+            use self::flatbuffers::Verifiable;
+            v.visit_table(pos)?
+                .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, u8>>>(
+                    &"package",
+                    Self::VT_PACKAGE,
+                    false,
+                )?
+                .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, u8>>>(
+                    &"send",
+                    Self::VT_SEND,
+                    false,
+                )?
+                .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, u8>>>(
+                    &"push_",
+                    Self::VT_PUSH_,
+                    false,
+                )?
+                .finish();
+            Ok(())
+        }
+    }
+    pub struct MlsKeyPackageArgs<'a> {
+        pub package: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u8>>>,
+        pub send: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u8>>>,
+        pub push_: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u8>>>,
+    }
+    impl<'a> Default for MlsKeyPackageArgs<'a> {
+        #[inline]
+        fn default() -> Self {
+            MlsKeyPackageArgs {
+                package: None,
+                send: None,
+                push_: None,
+            }
+        }
+    }
+    pub struct MlsKeyPackageBuilder<'a: 'b, 'b> {
+        fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+        start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+    }
+    impl<'a: 'b, 'b> MlsKeyPackageBuilder<'a, 'b> {
+        #[inline]
+        pub fn add_package(
+            &mut self,
+            package: flatbuffers::WIPOffset<flatbuffers::Vector<'b, u8>>,
+        ) {
+            self.fbb_
+                .push_slot_always::<flatbuffers::WIPOffset<_>>(MlsKeyPackage::VT_PACKAGE, package);
+        }
+        #[inline]
+        pub fn add_send(&mut self, send: flatbuffers::WIPOffset<flatbuffers::Vector<'b, u8>>) {
+            self.fbb_
+                .push_slot_always::<flatbuffers::WIPOffset<_>>(MlsKeyPackage::VT_SEND, send);
+        }
+        #[inline]
+        pub fn add_push_(&mut self, push_: flatbuffers::WIPOffset<flatbuffers::Vector<'b, u8>>) {
+            self.fbb_
+                .push_slot_always::<flatbuffers::WIPOffset<_>>(MlsKeyPackage::VT_PUSH_, push_);
+        }
+        #[inline]
+        pub fn new(
+            _fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+        ) -> MlsKeyPackageBuilder<'a, 'b> {
+            let start = _fbb.start_table();
+            MlsKeyPackageBuilder {
+                fbb_: _fbb,
+                start_: start,
+            }
+        }
+        #[inline]
+        pub fn finish(self) -> flatbuffers::WIPOffset<MlsKeyPackage<'a>> {
+            let o = self.fbb_.end_table(self.start_);
+            flatbuffers::WIPOffset::new(o.value())
+        }
+    }
+
+    impl std::fmt::Debug for MlsKeyPackage<'_> {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            let mut ds = f.debug_struct("MlsKeyPackage");
+            ds.field("package", &self.package());
+            ds.field("send", &self.send());
+            ds.field("push_", &self.push_());
+            ds.finish()
+        }
+    }
+    pub enum MlsMessageOffset {}
+    #[derive(Copy, Clone, PartialEq)]
+
+    pub struct MlsMessage<'a> {
+        pub _tab: flatbuffers::Table<'a>,
+    }
+
+    impl<'a> flatbuffers::Follow<'a> for MlsMessage<'a> {
+        type Inner = MlsMessage<'a>;
+        #[inline]
+        fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+            Self {
+                _tab: flatbuffers::Table { buf, loc },
+            }
+        }
+    }
+
+    impl<'a> MlsMessage<'a> {
+        #[inline]
+        pub fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+            MlsMessage { _tab: table }
+        }
+        #[allow(unused_mut)]
+        pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
+            _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
+            args: &'args MlsMessageArgs<'args>,
+        ) -> flatbuffers::WIPOffset<MlsMessage<'bldr>> {
+            let mut builder = MlsMessageBuilder::new(_fbb);
+            if let Some(x) = args.message {
+                builder.add_message(x);
+            }
+            builder.finish()
+        }
+
+        pub const VT_MESSAGE: flatbuffers::VOffsetT = 4;
+
+        #[inline]
+        pub fn message(&self) -> Option<&'a [u8]> {
+            self._tab
+                .get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u8>>>(
+                    MlsMessage::VT_MESSAGE,
+                    None,
+                )
+                .map(|v| v.safe_slice())
+        }
+    }
+
+    impl flatbuffers::Verifiable for MlsMessage<'_> {
+        #[inline]
+        fn run_verifier(
+            v: &mut flatbuffers::Verifier,
+            pos: usize,
+        ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+            use self::flatbuffers::Verifiable;
+            v.visit_table(pos)?
+                .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, u8>>>(
+                    &"message",
+                    Self::VT_MESSAGE,
+                    false,
+                )?
+                .finish();
+            Ok(())
+        }
+    }
+    pub struct MlsMessageArgs<'a> {
+        pub message: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u8>>>,
+    }
+    impl<'a> Default for MlsMessageArgs<'a> {
+        #[inline]
+        fn default() -> Self {
+            MlsMessageArgs { message: None }
+        }
+    }
+    pub struct MlsMessageBuilder<'a: 'b, 'b> {
+        fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+        start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+    }
+    impl<'a: 'b, 'b> MlsMessageBuilder<'a, 'b> {
+        #[inline]
+        pub fn add_message(
+            &mut self,
+            message: flatbuffers::WIPOffset<flatbuffers::Vector<'b, u8>>,
+        ) {
+            self.fbb_
+                .push_slot_always::<flatbuffers::WIPOffset<_>>(MlsMessage::VT_MESSAGE, message);
+        }
+        #[inline]
+        pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> MlsMessageBuilder<'a, 'b> {
+            let start = _fbb.start_table();
+            MlsMessageBuilder {
+                fbb_: _fbb,
+                start_: start,
+            }
+        }
+        #[inline]
+        pub fn finish(self) -> flatbuffers::WIPOffset<MlsMessage<'a>> {
+            let o = self.fbb_.end_table(self.start_);
+            flatbuffers::WIPOffset::new(o.value())
+        }
+    }
+
+    impl std::fmt::Debug for MlsMessage<'_> {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            let mut ds = f.debug_struct("MlsMessage");
+            ds.field("message", &self.message());
+            ds.finish()
+        }
+    }
+    pub enum MlsProposalOffset {}
+    #[derive(Copy, Clone, PartialEq)]
+
+    pub struct MlsProposal<'a> {
+        pub _tab: flatbuffers::Table<'a>,
+    }
+
+    impl<'a> flatbuffers::Follow<'a> for MlsProposal<'a> {
+        type Inner = MlsProposal<'a>;
+        #[inline]
+        fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+            Self {
+                _tab: flatbuffers::Table { buf, loc },
+            }
+        }
+    }
+
+    impl<'a> MlsProposal<'a> {
+        #[inline]
+        pub fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+            MlsProposal { _tab: table }
+        }
+        #[allow(unused_mut)]
+        pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
+            _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
+            args: &'args MlsProposalArgs<'args>,
+        ) -> flatbuffers::WIPOffset<MlsProposal<'bldr>> {
+            let mut builder = MlsProposalBuilder::new(_fbb);
+            if let Some(x) = args.push_ {
+                builder.add_push_(x);
+            }
+            if let Some(x) = args.proposal {
+                builder.add_proposal(x);
+            }
+            builder.finish()
+        }
+
+        pub const VT_PROPOSAL: flatbuffers::VOffsetT = 4;
+        pub const VT_PUSH_: flatbuffers::VOffsetT = 6;
+
+        #[inline]
+        pub fn proposal(&self) -> Option<&'a [u8]> {
+            self._tab
+                .get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u8>>>(
+                    MlsProposal::VT_PROPOSAL,
+                    None,
+                )
+                .map(|v| v.safe_slice())
+        }
+        #[inline]
+        pub fn push_(&self) -> Option<&'a [u8]> {
+            self._tab
+                .get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u8>>>(
+                    MlsProposal::VT_PUSH_,
+                    None,
+                )
+                .map(|v| v.safe_slice())
+        }
+    }
+
+    impl flatbuffers::Verifiable for MlsProposal<'_> {
+        #[inline]
+        fn run_verifier(
+            v: &mut flatbuffers::Verifier,
+            pos: usize,
+        ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+            use self::flatbuffers::Verifiable;
+            v.visit_table(pos)?
+                .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, u8>>>(
+                    &"proposal",
+                    Self::VT_PROPOSAL,
+                    false,
+                )?
+                .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, u8>>>(
+                    &"push_",
+                    Self::VT_PUSH_,
+                    false,
+                )?
+                .finish();
+            Ok(())
+        }
+    }
+    pub struct MlsProposalArgs<'a> {
+        pub proposal: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u8>>>,
+        pub push_: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u8>>>,
+    }
+    impl<'a> Default for MlsProposalArgs<'a> {
+        #[inline]
+        fn default() -> Self {
+            MlsProposalArgs {
+                proposal: None,
+                push_: None,
+            }
+        }
+    }
+    pub struct MlsProposalBuilder<'a: 'b, 'b> {
+        fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+        start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+    }
+    impl<'a: 'b, 'b> MlsProposalBuilder<'a, 'b> {
+        #[inline]
+        pub fn add_proposal(
+            &mut self,
+            proposal: flatbuffers::WIPOffset<flatbuffers::Vector<'b, u8>>,
+        ) {
+            self.fbb_
+                .push_slot_always::<flatbuffers::WIPOffset<_>>(MlsProposal::VT_PROPOSAL, proposal);
+        }
+        #[inline]
+        pub fn add_push_(&mut self, push_: flatbuffers::WIPOffset<flatbuffers::Vector<'b, u8>>) {
+            self.fbb_
+                .push_slot_always::<flatbuffers::WIPOffset<_>>(MlsProposal::VT_PUSH_, push_);
+        }
+        #[inline]
+        pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> MlsProposalBuilder<'a, 'b> {
+            let start = _fbb.start_table();
+            MlsProposalBuilder {
+                fbb_: _fbb,
+                start_: start,
+            }
+        }
+        #[inline]
+        pub fn finish(self) -> flatbuffers::WIPOffset<MlsProposal<'a>> {
+            let o = self.fbb_.end_table(self.start_);
+            flatbuffers::WIPOffset::new(o.value())
+        }
+    }
+
+    impl std::fmt::Debug for MlsProposal<'_> {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            let mut ds = f.debug_struct("MlsProposal");
+            ds.field("proposal", &self.proposal());
+            ds.field("push_", &self.push_());
             ds.finish()
         }
     }
@@ -1685,9 +2491,6 @@ pub mod messaging {
         ) -> flatbuffers::WIPOffset<OpenDetails<'bldr>> {
             let mut builder = OpenDetailsBuilder::new(_fbb);
             builder.add_issued(args.issued);
-            if let Some(x) = args.nonce {
-                builder.add_nonce(x);
-            }
             if let Some(x) = args.inbox {
                 builder.add_inbox(x);
             }
@@ -1695,23 +2498,13 @@ pub mod messaging {
         }
 
         pub const VT_INBOX: flatbuffers::VOffsetT = 4;
-        pub const VT_NONCE: flatbuffers::VOffsetT = 6;
-        pub const VT_ISSUED: flatbuffers::VOffsetT = 8;
+        pub const VT_ISSUED: flatbuffers::VOffsetT = 6;
 
         #[inline]
         pub fn inbox(&self) -> Option<&'a [u8]> {
             self._tab
                 .get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u8>>>(
                     OpenDetails::VT_INBOX,
-                    None,
-                )
-                .map(|v| v.safe_slice())
-        }
-        #[inline]
-        pub fn nonce(&self) -> Option<&'a [u8]> {
-            self._tab
-                .get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u8>>>(
-                    OpenDetails::VT_NONCE,
                     None,
                 )
                 .map(|v| v.safe_slice())
@@ -1737,11 +2530,6 @@ pub mod messaging {
                     Self::VT_INBOX,
                     false,
                 )?
-                .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, u8>>>(
-                    &"nonce",
-                    Self::VT_NONCE,
-                    false,
-                )?
                 .visit_field::<i64>(&"issued", Self::VT_ISSUED, false)?
                 .finish();
             Ok(())
@@ -1749,7 +2537,6 @@ pub mod messaging {
     }
     pub struct OpenDetailsArgs<'a> {
         pub inbox: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u8>>>,
-        pub nonce: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u8>>>,
         pub issued: i64,
     }
     impl<'a> Default for OpenDetailsArgs<'a> {
@@ -1757,7 +2544,6 @@ pub mod messaging {
         fn default() -> Self {
             OpenDetailsArgs {
                 inbox: None,
-                nonce: None,
                 issued: 0,
             }
         }
@@ -1771,11 +2557,6 @@ pub mod messaging {
         pub fn add_inbox(&mut self, inbox: flatbuffers::WIPOffset<flatbuffers::Vector<'b, u8>>) {
             self.fbb_
                 .push_slot_always::<flatbuffers::WIPOffset<_>>(OpenDetails::VT_INBOX, inbox);
-        }
-        #[inline]
-        pub fn add_nonce(&mut self, nonce: flatbuffers::WIPOffset<flatbuffers::Vector<'b, u8>>) {
-            self.fbb_
-                .push_slot_always::<flatbuffers::WIPOffset<_>>(OpenDetails::VT_NONCE, nonce);
         }
         #[inline]
         pub fn add_issued(&mut self, issued: i64) {
@@ -1801,7 +2582,6 @@ pub mod messaging {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             let mut ds = f.debug_struct("OpenDetails");
             ds.field("inbox", &self.inbox());
-            ds.field("nonce", &self.nonce());
             ds.field("issued", &self.issued());
             ds.finish()
         }
@@ -1834,6 +2614,7 @@ pub mod messaging {
             args: &'args OpenArgs<'args>,
         ) -> flatbuffers::WIPOffset<Open<'bldr>> {
             let mut builder = OpenBuilder::new(_fbb);
+            builder.add_nonce(args.nonce);
             if let Some(x) = args.signature {
                 builder.add_signature(x);
             }
@@ -1848,7 +2629,8 @@ pub mod messaging {
 
         pub const VT_DETAILS: flatbuffers::VOffsetT = 4;
         pub const VT_POW: flatbuffers::VOffsetT = 6;
-        pub const VT_SIGNATURE: flatbuffers::VOffsetT = 8;
+        pub const VT_NONCE: flatbuffers::VOffsetT = 8;
+        pub const VT_SIGNATURE: flatbuffers::VOffsetT = 10;
 
         #[inline]
         pub fn details(&self) -> Option<&'a [u8]> {
@@ -1867,6 +2649,10 @@ pub mod messaging {
                     None,
                 )
                 .map(|v| v.safe_slice())
+        }
+        #[inline]
+        pub fn nonce(&self) -> u64 {
+            self._tab.get::<u64>(Open::VT_NONCE, Some(0)).unwrap()
         }
         #[inline]
         pub fn signature(&self) -> Option<Signature<'a>> {
@@ -1893,6 +2679,7 @@ pub mod messaging {
                     Self::VT_POW,
                     false,
                 )?
+                .visit_field::<u64>(&"nonce", Self::VT_NONCE, false)?
                 .visit_field::<flatbuffers::ForwardsUOffset<Signature>>(
                     &"signature",
                     Self::VT_SIGNATURE,
@@ -1905,6 +2692,7 @@ pub mod messaging {
     pub struct OpenArgs<'a> {
         pub details: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u8>>>,
         pub pow: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u8>>>,
+        pub nonce: u64,
         pub signature: Option<flatbuffers::WIPOffset<Signature<'a>>>,
     }
     impl<'a> Default for OpenArgs<'a> {
@@ -1913,6 +2701,7 @@ pub mod messaging {
             OpenArgs {
                 details: None,
                 pow: None,
+                nonce: 0,
                 signature: None,
             }
         }
@@ -1934,6 +2723,10 @@ pub mod messaging {
         pub fn add_pow(&mut self, pow: flatbuffers::WIPOffset<flatbuffers::Vector<'b, u8>>) {
             self.fbb_
                 .push_slot_always::<flatbuffers::WIPOffset<_>>(Open::VT_POW, pow);
+        }
+        #[inline]
+        pub fn add_nonce(&mut self, nonce: u64) {
+            self.fbb_.push_slot::<u64>(Open::VT_NONCE, nonce, 0);
         }
         #[inline]
         pub fn add_signature(&mut self, signature: flatbuffers::WIPOffset<Signature<'b>>) {
@@ -1963,6 +2756,7 @@ pub mod messaging {
             let mut ds = f.debug_struct("Open");
             ds.field("details", &self.details());
             ds.field("pow", &self.pow());
+            ds.field("nonce", &self.nonce());
             ds.field("signature", &self.signature());
             ds.finish()
         }
@@ -2288,9 +3082,9 @@ pub mod messaging {
                 .map(|v| v.safe_slice())
         }
         #[inline]
-        pub fn type_(&self) -> ContentType {
+        pub fn type_(&self) -> EventType {
             self._tab
-                .get::<ContentType>(Event::VT_TYPE_, Some(ContentType::ACKNOWLEDGEMENT))
+                .get::<EventType>(Event::VT_TYPE_, Some(EventType::ACKNOWLEDGEMENT))
                 .unwrap()
         }
         #[inline]
@@ -2318,7 +3112,7 @@ pub mod messaging {
                     Self::VT_ID,
                     false,
                 )?
-                .visit_field::<ContentType>(&"type_", Self::VT_TYPE_, false)?
+                .visit_field::<EventType>(&"type_", Self::VT_TYPE_, false)?
                 .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, u8>>>(
                     &"content",
                     Self::VT_CONTENT,
@@ -2331,7 +3125,7 @@ pub mod messaging {
     pub struct EventArgs<'a> {
         pub version: Version,
         pub id: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u8>>>,
-        pub type_: ContentType,
+        pub type_: EventType,
         pub content: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u8>>>,
     }
     impl<'a> Default for EventArgs<'a> {
@@ -2340,7 +3134,7 @@ pub mod messaging {
             EventArgs {
                 version: Version::Unknown,
                 id: None,
-                type_: ContentType::ACKNOWLEDGEMENT,
+                type_: EventType::ACKNOWLEDGEMENT,
                 content: None,
             }
         }
@@ -2361,12 +3155,9 @@ pub mod messaging {
                 .push_slot_always::<flatbuffers::WIPOffset<_>>(Event::VT_ID, id);
         }
         #[inline]
-        pub fn add_type_(&mut self, type_: ContentType) {
-            self.fbb_.push_slot::<ContentType>(
-                Event::VT_TYPE_,
-                type_,
-                ContentType::ACKNOWLEDGEMENT,
-            );
+        pub fn add_type_(&mut self, type_: EventType) {
+            self.fbb_
+                .push_slot::<EventType>(Event::VT_TYPE_, type_, EventType::ACKNOWLEDGEMENT);
         }
         #[inline]
         pub fn add_content(
