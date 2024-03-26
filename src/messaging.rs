@@ -3,6 +3,7 @@ use crate::{
     token::Token,
 };
 
+use base64::write;
 use futures_util::{stream::SplitSink, SinkExt, StreamExt};
 use tokio::{
     io::{AsyncRead, AsyncWrite},
@@ -70,6 +71,8 @@ where
 
                         match event.type_() {
                             messaging::EventType::MESSAGE => {
+                                // println!(">>> received ws message...");
+
                                 match handle_message(&data, content, &datastore).await {
                                     Ok(_) => ack(&mut socket_tx, event.id().unwrap()).await,
                                     Err(ge) => {
@@ -79,16 +82,28 @@ where
                                 }
                             },
                             messaging::EventType::SUBSCRIBE => {
+                                // println!(">>> received ws subscribe...");
+
                                 match handle_subscribe(content, write_tx.clone(), &connection_id, &mut subscriptions, &datastore).await {
                                     Ok(_) => ack(&mut socket_tx, event.id().unwrap()).await,
                                     Err(ge) => {
+                                        println!("subscribe failed: {}", ge);
                                         err(&mut socket_tx, event.id().unwrap(), ge.details.as_bytes()).await;
                                         break;
                                     },
                                 }
                             },
                             messaging::EventType::OPEN => {
+                                // println!(">>> received ws open...");
 
+                                match handle_open(content, &datastore).await {
+                                    Ok(_) => ack(&mut socket_tx, event.id().unwrap()).await,
+                                    Err(ge) => {
+                                        println!("open err: {}", ge);
+                                        err(&mut socket_tx, event.id().unwrap(), ge.details.as_bytes()).await;
+                                        break;
+                                    },
+                                }
                             },
                             messaging::EventType::CLOSE => {
 
@@ -165,6 +180,33 @@ async fn handle_message(
     Ok(())
 }
 
+async fn handle_open(
+    content: &[u8],
+    datastore: &Arc<Mutex<Datastore>>,
+) -> Result<(), GenericError> {
+    let message = flatbuffers::root::<messaging::Open>(content)
+        .expect("Failed to process websocket message content");
+
+    let details = match message.details() {
+        Some(details) => flatbuffers::root::<messaging::OpenDetails>(details)
+            .expect("Failed to process websocket message content"),
+        None => return Err(GenericError::new("invalid message payload")),
+    };
+
+    // TODO validate open details proof of work and signatures
+    if let Some(inbox) = details.inbox() {
+        let mut ds = datastore.lock().await;
+        // If the inbox exists, push the message
+        if ds.messages.contains_key(inbox) {
+            return Err(GenericError::new("recipient inbox not found"));
+        } else {
+            ds.messages.insert(inbox.to_owned(), Vec::new());
+        };
+    }
+
+    Ok(())
+}
+
 async fn handle_subscribe(
     content: &[u8],
     write_tx: async_channel::Sender<Message>,
@@ -190,6 +232,9 @@ async fn handle_subscribe(
             .expect("Subscription details invalid");
         let inbox = details.inbox().expect("Subscription inbox missing");
 
+        // TODO re-enable this when tokens have been updated
+
+        /*
         let (mut authenticated_as, mut authorized_by, mut authorized_for) = (None, None, None);
 
         // validate the subscriptions signatures
@@ -205,7 +250,7 @@ async fn handle_subscribe(
                     details_sig_buf[0] = messaging::SignatureType::PAYLOAD.0 as u8;
                     details_sig_buf[1..details_len + 1].copy_from_slice(details_buf);
 
-                    let pk = PublicKey::from_bytes(signer, crate::keypair::Algorithm::Ed25519)
+                    let pk = PublicKey::from_address(signer)
                         .expect("Subscription signer invalid");
 
                     if !(pk.verify(&details_sig_buf, sig)) {
@@ -270,6 +315,9 @@ async fn handle_subscribe(
         }
 
         subscriptions.push(authorized_by);
+        */
+
+        subscriptions.push(inbox.to_vec());
     }
 
     let mut ds = datastore.lock().await;
@@ -317,7 +365,7 @@ where
     builder.finish(event, None);
 
     (*socket_tx)
-        .send(Message::binary(builder.finished_data()))
+        .send(Message::binary(builder.finished_data().to_vec()))
         .await
         .expect("Failed to send ACK");
 }
