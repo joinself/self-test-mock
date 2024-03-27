@@ -170,7 +170,7 @@ async fn handle_message(
 
         // if there are subscribers, forward them the messages
         if let Some(subscribers) = ds.subscribers.get_mut(recipient) {
-            for (_, sub) in subscribers {
+            for (connection_id, sub) in subscribers {
                 sub.send(Message::Binary(data.to_vec()))
                     .await
                     .expect("failed to send message to subscriber");
@@ -214,6 +214,8 @@ async fn handle_subscribe(
     subscriptions: &mut Vec<Vec<u8>>,
     datastore: &Arc<Mutex<Datastore>>,
 ) -> Result<(), GenericError> {
+    let mut new_subscriptions = Vec::new();
+
     let subscribe =
         flatbuffers::root::<messaging::Subscribe>(content).expect("Subscribe event invalid");
 
@@ -318,12 +320,13 @@ async fn handle_subscribe(
         */
 
         subscriptions.push(inbox.to_vec());
+        new_subscriptions.push(inbox.to_vec());
     }
 
     let mut ds = datastore.lock().await;
 
-    for subscription in subscriptions {
-        if let Some(inbox) = ds.messages.get(subscription) {
+    for subscription in new_subscriptions {
+        if let Some(inbox) = ds.messages.get(&subscription) {
             for msg in inbox {
                 write_tx
                     .send(Message::Binary(msg.clone()))
@@ -332,7 +335,7 @@ async fn handle_subscribe(
             }
         }
 
-        if let Some(subscribers) = ds.subscribers.get_mut(subscription) {
+        if let Some(subscribers) = ds.subscribers.get_mut(&subscription) {
             subscribers.push((connection_id.to_vec(), write_tx.clone()));
         } else {
             ds.subscribers.insert(
