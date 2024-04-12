@@ -3,7 +3,6 @@ use crate::{
     token::Token,
 };
 
-use base64::write;
 use futures_util::{stream::SplitSink, SinkExt, StreamExt};
 use tokio::{
     io::{AsyncRead, AsyncWrite},
@@ -137,7 +136,10 @@ where
     for subscriber in subscriptions {
         // Ignore if no such element is found
         if let Some(s) = ds.subscribers.get_mut(&subscriber) {
-            if let Some(p) = s.iter().position(|(conn_id, _)| connection_id.eq(conn_id)) {
+            if let Some(p) = s
+                .iter()
+                .position(|(conn_id, _, _)| connection_id.eq(conn_id))
+            {
                 s.remove(p);
             }
         };
@@ -158,6 +160,11 @@ async fn handle_message(
         None => return Err(GenericError::new("invalid message payload")),
     };
 
+    let sender = match payload.sender() {
+        Some(sender) => sender,
+        None => return Err(GenericError::new("message missing sender field")),
+    };
+
     // TODO validate message authentication and authorization
     if let Some(recipient) = payload.recipient() {
         let mut ds = datastore.lock().await;
@@ -170,7 +177,11 @@ async fn handle_message(
 
         // if there are subscribers, forward them the messages
         if let Some(subscribers) = ds.subscribers.get_mut(recipient) {
-            for (connection_id, sub) in subscribers {
+            for (connection_id, subscriber, sub) in subscribers {
+                if (*subscriber).eq(sender) {
+                    // skip messages from the same sender
+                    continue;
+                }
                 sub.send(Message::Binary(data.to_vec()))
                     .await
                     .expect("failed to send message to subscriber");
@@ -234,9 +245,6 @@ async fn handle_subscribe(
             .expect("Subscription details invalid");
         let inbox = details.inbox().expect("Subscription inbox missing");
 
-        // TODO re-enable this when tokens have been updated
-
-        /*
         let (mut authenticated_as, mut authorized_by, mut authorized_for) = (None, None, None);
 
         // validate the subscriptions signatures
@@ -252,8 +260,7 @@ async fn handle_subscribe(
                     details_sig_buf[0] = messaging::SignatureType::PAYLOAD.0 as u8;
                     details_sig_buf[1..details_len + 1].copy_from_slice(details_buf);
 
-                    let pk = PublicKey::from_address(signer)
-                        .expect("Subscription signer invalid");
+                    let pk = PublicKey::from_bytes(signer).expect("Subscription signer invalid");
 
                     if !(pk.verify(&details_sig_buf, sig)) {
                         return Err(GenericError::new("bad authentication signature"));
@@ -280,7 +287,7 @@ async fn handle_subscribe(
                             // token.validate();
 
                             (authorized_by, authorized_for) =
-                                (Some(token.signer().id()), Some(token.bearer().id()));
+                                (Some(token.issuer().to_vec()), Some(token.bearer().to_vec()));
                         }
                         _ => return Err(GenericError::new("unsupported token type")),
                     }
@@ -316,18 +323,19 @@ async fn handle_subscribe(
             }
         }
 
-        subscriptions.push(authorized_by);
-        */
+        subscriptions.push(authorized_by.to_vec());
+        new_subscriptions.push((authorized_by, authenticated_as));
 
-        subscriptions.push(inbox.to_vec());
-        new_subscriptions.push(inbox.to_vec());
+        // subscriptions.push(inbox.to_vec());
+        // new_subscriptions.push(inbox.to_vec());
     }
 
     let mut ds = datastore.lock().await;
 
-    for subscription in new_subscriptions {
-        if let Some(inbox) = ds.messages.get(&subscription) {
+    for (inbox, subscriber) in new_subscriptions {
+        if let Some(inbox) = ds.messages.get(&inbox) {
             for msg in inbox {
+                // TODO skip messages from same sender
                 write_tx
                     .send(Message::Binary(msg.clone()))
                     .await
@@ -335,12 +343,12 @@ async fn handle_subscribe(
             }
         }
 
-        if let Some(subscribers) = ds.subscribers.get_mut(&subscription) {
-            subscribers.push((connection_id.to_vec(), write_tx.clone()));
+        if let Some(subscribers) = ds.subscribers.get_mut(&inbox) {
+            subscribers.push((connection_id.to_vec(), subscriber, write_tx.clone()));
         } else {
             ds.subscribers.insert(
-                subscription.clone(),
-                vec![(connection_id.to_vec(), write_tx.clone())],
+                inbox.clone(),
+                vec![(connection_id.to_vec(), subscriber, write_tx.clone())],
             );
         }
     }

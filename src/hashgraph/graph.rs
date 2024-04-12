@@ -165,7 +165,7 @@ impl Hashgraph {
                     return Err(SelfError::HashgraphInvalidSignatureLength);
                 }
 
-                let signers_pk = PublicKey::from_address(signer)?;
+                let signers_pk = PublicKey::from_bytes(signer)?;
                 if !signers_pk.verify(&self.sig_buf, signature_data) {
                     return Err(SelfError::HashgraphInvalidSignature);
                 }
@@ -576,7 +576,7 @@ impl Hashgraph {
                             role: action.roles(),
                             from: op.timestamp(),
                         }],
-                        public_key: PublicKey::from_bytes(id, Algorithm::Ed25519)?,
+                        public_key: PublicKey::from_bytes(id)?,
                         created_at: op.timestamp(),
                         revoked_at: 0,
                         incoming: Vec::new(),
@@ -641,7 +641,7 @@ impl Hashgraph {
                             role: action.roles(),
                             from: op.timestamp(),
                         }],
-                        public_key: PublicKey::from_bytes(id, Algorithm::Ed25519)?,
+                        public_key: PublicKey::from_bytes(id)?,
                         created_at: op.timestamp(),
                         revoked_at: 0,
                         incoming: Vec::new(),
@@ -879,22 +879,22 @@ impl Hashgraph {
         };
 
         if root.revoked_at == 0 {
-            if references.contains_key(&root.public_key.id()) {
+            if references.contains_key(root.public_key.address()) {
                 return Err(SelfError::HashgraphDuplicateAction);
             }
 
-            references.insert(root.public_key.id(), (Actionable::Recover, 0));
+            references.insert(root.public_key.address().to_vec(), (Actionable::Recover, 0));
         }
 
         for child in root.collect().iter() {
             let borrowed_child = child.as_ref().borrow();
 
             if borrowed_child.revoked_at == 0 {
-                if references.contains_key(&borrowed_child.public_key.id()) {
+                if references.contains_key(borrowed_child.public_key.address()) {
                     return Err(SelfError::HashgraphDuplicateAction);
                 }
 
-                references.insert(root.public_key.id(), (Actionable::Recover, 0));
+                references.insert(root.public_key.address().to_vec(), (Actionable::Recover, 0));
             }
         }
 
@@ -937,22 +937,28 @@ impl Hashgraph {
         };
 
         if root.revoked_at == 0 {
-            if references.contains_key(&root.public_key.id()) {
+            if references.contains_key(root.public_key.address()) {
                 return Err(SelfError::HashgraphDuplicateAction);
             }
 
-            references.insert(root.public_key.id(), (Actionable::Deactivate, 0));
+            references.insert(
+                root.public_key.address().to_vec(),
+                (Actionable::Deactivate, 0),
+            );
         }
 
         for child in root.collect().iter() {
             let borrowed_child = child.as_ref().borrow();
 
             if borrowed_child.revoked_at == 0 {
-                if references.contains_key(&borrowed_child.public_key.id()) {
+                if references.contains_key(borrowed_child.public_key.address()) {
                     return Err(SelfError::HashgraphDuplicateAction);
                 }
 
-                references.insert(root.public_key.id(), (Actionable::Deactivate, 0));
+                references.insert(
+                    root.public_key.address().to_vec(),
+                    (Actionable::Deactivate, 0),
+                );
             }
         }
 
@@ -1016,14 +1022,14 @@ mod tests {
 
         let operation = graph
             .create()
-            .id(&identifier_key.address())
-            .grant_embedded(&invocation_key.address(), hashgraph::Role::Invocation)
+            .id(identifier_key.address())
+            .grant_embedded(invocation_key.address(), hashgraph::Role::Invocation)
             .grant_embedded(
-                &authentication_key.address(),
+                authentication_key.address(),
                 hashgraph::Role::Authentication,
             )
-            .grant_embedded(&assertion_key.address(), hashgraph::Role::Assertion)
-            .grant_embedded(&agreement_key.address(), hashgraph::Role::KeyAgreement)
+            .grant_embedded(assertion_key.address(), hashgraph::Role::Assertion)
+            .grant_embedded(agreement_key.address(), hashgraph::Role::KeyAgreement)
             .sign(&identifier_key)
             .sign(&invocation_key)
             .sign(&authentication_key)
@@ -1051,15 +1057,15 @@ mod tests {
 
         let operation = graph
             .create()
-            .id(&identifier_key.address())
+            .id(identifier_key.address())
             .timestamp(now)
-            .grant_embedded(&invocation_key.address(), hashgraph::Role::Invocation)
+            .grant_embedded(invocation_key.address(), hashgraph::Role::Invocation)
             .grant_embedded(
-                &authentication_key.address(),
+                authentication_key.address(),
                 hashgraph::Role::Authentication,
             )
-            .grant_embedded(&assertion_key.address(), hashgraph::Role::Assertion)
-            .grant_embedded(&agreement_key.address(), hashgraph::Role::KeyAgreement)
+            .grant_embedded(assertion_key.address(), hashgraph::Role::Assertion)
+            .grant_embedded(agreement_key.address(), hashgraph::Role::KeyAgreement)
             .sign(&identifier_key)
             .sign(&invocation_key)
             .sign(&authentication_key)
@@ -1073,10 +1079,10 @@ mod tests {
 
         let operation = graph
             .create()
-            .id(&identifier_key.address())
+            .id(identifier_key.address())
             .timestamp(now + 1)
             .grant_embedded(
-                &multirole_key.address(),
+                multirole_key.address(),
                 hashgraph::Role::Verification | hashgraph::Role::Authentication,
             )
             .sign(&invocation_key)
@@ -1090,16 +1096,16 @@ mod tests {
 
         let operation = graph
             .create()
-            .id(&identifier_key.address())
+            .id(identifier_key.address())
             .timestamp(now + 2)
             .modify(
-                &multirole_key.address(),
+                multirole_key.address(),
                 hashgraph::Role::Verification
                     | hashgraph::Role::Authentication
                     | hashgraph::Role::Assertion
                     | hashgraph::Role::Invocation,
             )
-            .revoke(&invocation_key.address(), Some(now + 2))
+            .revoke(invocation_key.address(), Some(now + 2))
             .sign(&invocation_key)
             .build()
             .expect("operation invalid");
@@ -1121,9 +1127,9 @@ mod tests {
 
         let operation = graph
             .create()
-            .id(&identifier_key.address())
+            .id(identifier_key.address())
             .timestamp(now)
-            .grant_embedded(&invocation_key.address(), hashgraph::Role::Invocation)
+            .grant_embedded(invocation_key.address(), hashgraph::Role::Invocation)
             .sign(&identifier_key)
             .sign(&invocation_key)
             .build()
@@ -1135,10 +1141,10 @@ mod tests {
 
         let operation = graph
             .create()
-            .id(&identifier_key.address())
+            .id(identifier_key.address())
             .timestamp(now + 1)
             .recover(Some(now + 1))
-            .grant_embedded(&recovery_key.address(), hashgraph::Role::Invocation)
+            .grant_embedded(recovery_key.address(), hashgraph::Role::Invocation)
             .sign(&invocation_key)
             .sign(&recovery_key)
             .build()
@@ -1160,9 +1166,9 @@ mod tests {
 
         let operation = graph
             .create()
-            .id(&identifier_key.address())
+            .id(identifier_key.address())
             .timestamp(now)
-            .grant_embedded(&invocation_key.address(), hashgraph::Role::Invocation)
+            .grant_embedded(invocation_key.address(), hashgraph::Role::Invocation)
             .sign(&identifier_key)
             .sign(&invocation_key)
             .build()
@@ -1174,7 +1180,7 @@ mod tests {
 
         let operation = graph
             .create()
-            .id(&identifier_key.address())
+            .id(identifier_key.address())
             .timestamp(now + 1)
             .deactivate(Some(now + 1))
             .sign(&invocation_key)
@@ -1198,9 +1204,9 @@ mod tests {
 
         let operation = graph
             .create()
-            .id(&identifier_key.address())
+            .id(identifier_key.address())
             .timestamp(now)
-            .grant_embedded(&invocation_key.address(), hashgraph::Role::Invocation)
+            .grant_embedded(invocation_key.address(), hashgraph::Role::Invocation)
             .sign(&identifier_key)
             .sign(&invocation_key)
             .build()
@@ -1212,12 +1218,9 @@ mod tests {
 
         let operation = graph
             .create()
-            .id(&identifier_key.address())
+            .id(identifier_key.address())
             .timestamp(now + 1)
-            .grant_embedded(
-                &authenticaton_key.address(),
-                hashgraph::Role::Authentication,
-            )
+            .grant_embedded(authenticaton_key.address(), hashgraph::Role::Authentication)
             .sign(&invocation_key)
             .sign(&authenticaton_key)
             .build()
@@ -1240,11 +1243,11 @@ mod tests {
 
         let operation = graph
             .create()
-            .id(&identifier_key.address())
+            .id(identifier_key.address())
             .timestamp(now)
-            .grant_embedded(&invocation_key.address(), hashgraph::Role::Invocation)
+            .grant_embedded(invocation_key.address(), hashgraph::Role::Invocation)
             .grant_embedded(
-                &multirole_key.address(),
+                multirole_key.address(),
                 hashgraph::Role::Verification | hashgraph::Role::Authentication,
             )
             .sign(&identifier_key)
@@ -1259,10 +1262,10 @@ mod tests {
 
         let operation = graph
             .create()
-            .id(&identifier_key.address())
+            .id(identifier_key.address())
             .timestamp(now + 1)
             .modify(
-                &multirole_key.address(),
+                multirole_key.address(),
                 hashgraph::Role::Verification | hashgraph::Role::Assertion,
             )
             .sign(&invocation_key)
@@ -1286,10 +1289,10 @@ mod tests {
 
         let operation = graph
             .create()
-            .id(&identifier_key.address())
+            .id(identifier_key.address())
             .timestamp(now)
-            .grant_embedded(&invocation_key.address(), hashgraph::Role::Invocation)
-            .grant_embedded(&assertion_key.address(), hashgraph::Role::Assertion)
+            .grant_embedded(invocation_key.address(), hashgraph::Role::Invocation)
+            .grant_embedded(assertion_key.address(), hashgraph::Role::Assertion)
             .sign(&identifier_key)
             .sign(&invocation_key)
             .sign(&assertion_key)
@@ -1302,9 +1305,9 @@ mod tests {
 
         let operation = graph
             .create()
-            .id(&identifier_key.address())
+            .id(identifier_key.address())
             .timestamp(now + 1)
-            .revoke(&assertion_key.address(), Some(now + 1))
+            .revoke(assertion_key.address(), Some(now + 1))
             .sign(&invocation_key)
             .build()
             .expect("operation invalid");
@@ -1326,9 +1329,9 @@ mod tests {
 
         let operation = graph
             .create()
-            .id(&identifier_key.address())
+            .id(identifier_key.address())
             .timestamp(now)
-            .grant_embedded(&invocation_key.address(), hashgraph::Role::Invocation)
+            .grant_embedded(invocation_key.address(), hashgraph::Role::Invocation)
             .sign(&identifier_key)
             .sign(&invocation_key)
             .build()
@@ -1340,13 +1343,10 @@ mod tests {
 
         let operation = graph
             .create()
-            .id(&identifier_key.address())
+            .id(identifier_key.address())
             .sequence(2)
             .timestamp(now + 1)
-            .grant_embedded(
-                &authenticaton_key.address(),
-                hashgraph::Role::Authentication,
-            )
+            .grant_embedded(authenticaton_key.address(), hashgraph::Role::Authentication)
             .sign(&invocation_key)
             .sign(&authenticaton_key)
             .build()
@@ -1370,9 +1370,9 @@ mod tests {
 
         let operation = graph
             .create()
-            .id(&identifier_key.address())
+            .id(identifier_key.address())
             .timestamp(now)
-            .grant_embedded(&invocation_key.address(), hashgraph::Role::Invocation)
+            .grant_embedded(invocation_key.address(), hashgraph::Role::Invocation)
             .sign(&identifier_key)
             .sign(&invocation_key)
             .build()
@@ -1384,12 +1384,9 @@ mod tests {
 
         let operation = graph
             .create()
-            .id(&identifier_key.address())
+            .id(identifier_key.address())
             .timestamp(now)
-            .grant_embedded(
-                &authenticaton_key.address(),
-                hashgraph::Role::Authentication,
-            )
+            .grant_embedded(authenticaton_key.address(), hashgraph::Role::Authentication)
             .sign(&invocation_key)
             .sign(&authenticaton_key)
             .build()
@@ -1402,12 +1399,9 @@ mod tests {
 
         let operation = graph
             .create()
-            .id(&identifier_key.address())
+            .id(identifier_key.address())
             .timestamp(now - 1)
-            .grant_embedded(
-                &authenticaton_key.address(),
-                hashgraph::Role::Authentication,
-            )
+            .grant_embedded(authenticaton_key.address(), hashgraph::Role::Authentication)
             .sign(&invocation_key)
             .sign(&authenticaton_key)
             .build()
@@ -1431,9 +1425,9 @@ mod tests {
 
         let operation = graph
             .create()
-            .id(&identifier_key.address())
+            .id(identifier_key.address())
             .timestamp(now)
-            .grant_embedded(&invocation_key.address(), hashgraph::Role::Invocation)
+            .grant_embedded(invocation_key.address(), hashgraph::Role::Invocation)
             .sign(&identifier_key)
             .sign(&invocation_key)
             .build()
@@ -1447,13 +1441,10 @@ mod tests {
 
         let operation = graph
             .create()
-            .id(&identifier_key.address())
+            .id(identifier_key.address())
             .timestamp(now + 1)
             .previous(&invalid_previous_hash)
-            .grant_embedded(
-                &authenticaton_key.address(),
-                hashgraph::Role::Authentication,
-            )
+            .grant_embedded(authenticaton_key.address(), hashgraph::Role::Authentication)
             .sign(&invocation_key)
             .sign(&authenticaton_key)
             .build()
@@ -1478,9 +1469,9 @@ mod tests {
 
         let operation = graph
             .create()
-            .id(&identifier_key.address())
+            .id(identifier_key.address())
             .timestamp(now)
-            .grant_embedded(&invocation_key.address(), hashgraph::Role::Invocation)
+            .grant_embedded(invocation_key.address(), hashgraph::Role::Invocation)
             .sign(&identifier_key)
             .sign(&invocation_key)
             .build()
@@ -1490,16 +1481,14 @@ mod tests {
             .execute(operation)
             .expect("operation execution failed");
 
-        let bad_signing_key = KeyPair::from_parts(invocation_key.public(), other_key.secret());
+        let bad_signing_key =
+            KeyPair::from_parts(invocation_key.public().to_owned(), other_key.secret());
 
         let operation = graph
             .create()
-            .id(&identifier_key.address())
+            .id(identifier_key.address())
             .timestamp(now + 1)
-            .grant_embedded(
-                &authenticaton_key.address(),
-                hashgraph::Role::Authentication,
-            )
+            .grant_embedded(authenticaton_key.address(), hashgraph::Role::Authentication)
             .sign(&bad_signing_key)
             .sign(&authenticaton_key)
             .build()
@@ -1512,12 +1501,9 @@ mod tests {
 
         let operation = graph
             .create()
-            .id(&identifier_key.address())
+            .id(identifier_key.address())
             .timestamp(now + 1)
-            .grant_embedded(
-                &authenticaton_key.address(),
-                hashgraph::Role::Authentication,
-            )
+            .grant_embedded(authenticaton_key.address(), hashgraph::Role::Authentication)
             .sign(&invocation_key)
             .build()
             .expect("operation invalid");
@@ -1529,12 +1515,9 @@ mod tests {
 
         let operation = graph
             .create()
-            .id(&identifier_key.address())
+            .id(identifier_key.address())
             .timestamp(now + 1)
-            .grant_embedded(
-                &authenticaton_key.address(),
-                hashgraph::Role::Authentication,
-            )
+            .grant_embedded(authenticaton_key.address(), hashgraph::Role::Authentication)
             .sign(&invocation_key)
             .sign(&authenticaton_key)
             .sign(&authenticaton_key)
@@ -1561,10 +1544,10 @@ mod tests {
 
         let operation = graph
             .create()
-            .id(&identifier_key.address())
+            .id(identifier_key.address())
             .timestamp(now)
-            .grant_embedded(&invocation_key.address(), hashgraph::Role::Invocation)
-            .grant_embedded(&assertion_key.address(), hashgraph::Role::Assertion)
+            .grant_embedded(invocation_key.address(), hashgraph::Role::Invocation)
+            .grant_embedded(assertion_key.address(), hashgraph::Role::Assertion)
             .sign(&identifier_key)
             .sign(&invocation_key)
             .sign(&assertion_key)
@@ -1575,16 +1558,14 @@ mod tests {
             .execute(operation)
             .expect("operation execution failed");
 
-        let bad_signing_key = KeyPair::from_parts(other_key.public(), invocation_key.secret());
+        let bad_signing_key =
+            KeyPair::from_parts(other_key.public().to_owned(), invocation_key.secret());
 
         let operation = graph
             .create()
-            .id(&identifier_key.address())
+            .id(identifier_key.address())
             .timestamp(now + 1)
-            .grant_embedded(
-                &authenticaton_key.address(),
-                hashgraph::Role::Authentication,
-            )
+            .grant_embedded(authenticaton_key.address(), hashgraph::Role::Authentication)
             .sign(&bad_signing_key)
             .sign(&authenticaton_key)
             .build()
@@ -1597,12 +1578,9 @@ mod tests {
 
         let operation = graph
             .create()
-            .id(&identifier_key.address())
+            .id(identifier_key.address())
             .timestamp(now + 1)
-            .grant_embedded(
-                &authenticaton_key.address(),
-                hashgraph::Role::Authentication,
-            )
+            .grant_embedded(authenticaton_key.address(), hashgraph::Role::Authentication)
             .sign(&invocation_key)
             .sign(&assertion_key)
             .sign(&authenticaton_key)
@@ -1628,9 +1606,9 @@ mod tests {
 
         let operation = graph
             .create()
-            .id(&identifier_key.address())
+            .id(identifier_key.address())
             .timestamp(now)
-            .grant_embedded(&invocation_key.address(), hashgraph::Role::Invocation)
+            .grant_embedded(invocation_key.address(), hashgraph::Role::Invocation)
             .sign(&identifier_key)
             .sign(&invocation_key)
             .build()
@@ -1642,12 +1620,9 @@ mod tests {
 
         let operation = graph
             .create()
-            .id(&identifier_key.address())
+            .id(identifier_key.address())
             .timestamp(now + 1)
-            .grant_embedded(
-                &authenticaton_key.address(),
-                hashgraph::Role::Authentication,
-            )
+            .grant_embedded(authenticaton_key.address(), hashgraph::Role::Authentication)
             .sign(&authenticaton_key)
             .build()
             .expect("operation invalid");
@@ -1659,10 +1634,10 @@ mod tests {
 
         let operation = graph
             .create()
-            .id(&identifier_key.address())
+            .id(identifier_key.address())
             .timestamp(now + 1)
-            .grant_embedded(&replacement_key.address(), hashgraph::Role::Invocation)
-            .revoke(&invocation_key.address(), None)
+            .grant_embedded(replacement_key.address(), hashgraph::Role::Invocation)
+            .revoke(invocation_key.address(), None)
             .sign(&invocation_key)
             .sign(&replacement_key)
             .build()
@@ -1674,12 +1649,9 @@ mod tests {
 
         let operation = graph
             .create()
-            .id(&identifier_key.address())
+            .id(identifier_key.address())
             .timestamp(now + 2)
-            .grant_embedded(
-                &authenticaton_key.address(),
-                hashgraph::Role::Authentication,
-            )
+            .grant_embedded(authenticaton_key.address(), hashgraph::Role::Authentication)
             .sign(&invocation_key)
             .sign(&authenticaton_key)
             .build()
@@ -1703,9 +1675,9 @@ mod tests {
 
         let operation = graph
             .create()
-            .id(&identifier_key.address())
+            .id(identifier_key.address())
             .timestamp(now)
-            .grant_embedded(&invocation_key.address(), hashgraph::Role::Invocation)
+            .grant_embedded(invocation_key.address(), hashgraph::Role::Invocation)
             .sign(&identifier_key)
             .sign(&invocation_key)
             .build()
@@ -1718,9 +1690,9 @@ mod tests {
         // grant same key twice
         let operation = graph
             .create()
-            .id(&identifier_key.address())
+            .id(identifier_key.address())
             .timestamp(now + 1)
-            .grant_embedded(&invocation_key.address(), hashgraph::Role::Invocation)
+            .grant_embedded(invocation_key.address(), hashgraph::Role::Invocation)
             .sign(&invocation_key)
             .build()
             .expect("operation invalid");
@@ -1733,10 +1705,10 @@ mod tests {
         // grant same key twice in the same operation
         let operation = graph
             .create()
-            .id(&identifier_key.address())
+            .id(identifier_key.address())
             .timestamp(now + 1)
-            .grant_embedded(&duplicate_key.address(), hashgraph::Role::Assertion)
-            .grant_embedded(&duplicate_key.address(), hashgraph::Role::Assertion)
+            .grant_embedded(duplicate_key.address(), hashgraph::Role::Assertion)
+            .grant_embedded(duplicate_key.address(), hashgraph::Role::Assertion)
             .sign(&invocation_key)
             .sign(&duplicate_key)
             .build()
@@ -1750,10 +1722,10 @@ mod tests {
         // grant a key with multiple roles, but not a verification method
         let operation = graph
             .create()
-            .id(&identifier_key.address())
+            .id(identifier_key.address())
             .timestamp(now + 1)
             .grant_embedded(
-                &duplicate_key.address(),
+                duplicate_key.address(),
                 hashgraph::Role::Assertion | hashgraph::Role::Authentication,
             )
             .sign(&invocation_key)
@@ -1769,7 +1741,7 @@ mod tests {
         // deactivate the account
         let operation = graph
             .create()
-            .id(&identifier_key.address())
+            .id(identifier_key.address())
             .timestamp(now + 1)
             .deactivate(None)
             .sign(&invocation_key)
@@ -1783,9 +1755,9 @@ mod tests {
         // grant on a deactivated account
         let operation = graph
             .create()
-            .id(&identifier_key.address())
+            .id(identifier_key.address())
             .timestamp(now + 2)
-            .grant_embedded(&duplicate_key.address(), hashgraph::Role::Assertion)
+            .grant_embedded(duplicate_key.address(), hashgraph::Role::Assertion)
             .sign(&invocation_key)
             .sign(&duplicate_key)
             .build()
@@ -1811,11 +1783,11 @@ mod tests {
 
         let operation = graph
             .create()
-            .id(&identifier_key.address())
+            .id(identifier_key.address())
             .timestamp(now)
-            .grant_embedded(&invocation_key.address(), hashgraph::Role::Invocation)
-            .grant_embedded(&assertion_key.address(), hashgraph::Role::Assertion)
-            .grant_embedded(&revoked_key.address(), hashgraph::Role::Authentication)
+            .grant_embedded(invocation_key.address(), hashgraph::Role::Invocation)
+            .grant_embedded(assertion_key.address(), hashgraph::Role::Assertion)
+            .grant_embedded(revoked_key.address(), hashgraph::Role::Authentication)
             .sign(&identifier_key)
             .sign(&invocation_key)
             .sign(&assertion_key)
@@ -1829,9 +1801,9 @@ mod tests {
 
         let operation = graph
             .create()
-            .id(&identifier_key.address())
+            .id(identifier_key.address())
             .timestamp(now + 1)
-            .revoke(&assertion_key.address(), None)
+            .revoke(assertion_key.address(), None)
             .sign(&invocation_key)
             .build()
             .expect("operation invalid");
@@ -1843,9 +1815,9 @@ mod tests {
         // revoke a non-existant key
         let operation = graph
             .create()
-            .id(&identifier_key.address())
+            .id(identifier_key.address())
             .timestamp(now + 2)
-            .revoke(&unknown_key.address(), None)
+            .revoke(unknown_key.address(), None)
             .sign(&invocation_key)
             .build()
             .expect("operation invalid");
@@ -1858,9 +1830,9 @@ mod tests {
         // revoke the same key twice
         let operation = graph
             .create()
-            .id(&identifier_key.address())
+            .id(identifier_key.address())
             .timestamp(now + 2)
-            .revoke(&assertion_key.address(), None)
+            .revoke(assertion_key.address(), None)
             .sign(&invocation_key)
             .build()
             .expect("operation invalid");
@@ -1873,10 +1845,10 @@ mod tests {
         // revoke the same key twice in the same operation
         let operation = graph
             .create()
-            .id(&identifier_key.address())
+            .id(identifier_key.address())
             .timestamp(now + 2)
-            .revoke(&revoked_key.address(), None)
-            .revoke(&revoked_key.address(), None)
+            .revoke(revoked_key.address(), None)
+            .revoke(revoked_key.address(), None)
             .sign(&invocation_key)
             .build()
             .expect("operation invalid");
@@ -1889,10 +1861,10 @@ mod tests {
         // revoke all keys
         let operation = graph
             .create()
-            .id(&identifier_key.address())
+            .id(identifier_key.address())
             .timestamp(now + 2)
-            .revoke(&invocation_key.address(), None)
-            .revoke(&revoked_key.address(), None)
+            .revoke(invocation_key.address(), None)
+            .revoke(revoked_key.address(), None)
             .sign(&invocation_key)
             .build()
             .expect("operation invalid");
@@ -1905,7 +1877,7 @@ mod tests {
         // deactivate the account
         let operation = graph
             .create()
-            .id(&identifier_key.address())
+            .id(identifier_key.address())
             .timestamp(now + 2)
             .deactivate(None)
             .sign(&invocation_key)
@@ -1919,9 +1891,9 @@ mod tests {
         // revoke on a deactivated account
         let operation = graph
             .create()
-            .id(&identifier_key.address())
+            .id(identifier_key.address())
             .timestamp(now + 3)
-            .revoke(&revoked_key.address(), None)
+            .revoke(revoked_key.address(), None)
             .sign(&invocation_key)
             .build()
             .expect("operation invalid");
@@ -1946,11 +1918,11 @@ mod tests {
 
         let operation = graph
             .create()
-            .id(&identifier_key.address())
+            .id(identifier_key.address())
             .timestamp(now)
-            .grant_embedded(&invocation_key.address(), hashgraph::Role::Invocation)
-            .grant_embedded(&modified_key.address(), hashgraph::Role::Assertion)
-            .grant_embedded(&verification_key.address(), hashgraph::Role::Verification)
+            .grant_embedded(invocation_key.address(), hashgraph::Role::Invocation)
+            .grant_embedded(modified_key.address(), hashgraph::Role::Assertion)
+            .grant_embedded(verification_key.address(), hashgraph::Role::Verification)
             .sign(&identifier_key)
             .sign(&invocation_key)
             .sign(&modified_key)
@@ -1965,9 +1937,9 @@ mod tests {
         // modify a non-existent key
         let operation = graph
             .create()
-            .id(&identifier_key.address())
+            .id(identifier_key.address())
             .timestamp(now + 1)
-            .modify(&unknown_key.address(), hashgraph::Role::Invocation)
+            .modify(unknown_key.address(), hashgraph::Role::Invocation)
             .sign(&invocation_key)
             .build()
             .expect("operation invalid");
@@ -1980,14 +1952,14 @@ mod tests {
         // modify the same key twice in an operation
         let operation = graph
             .create()
-            .id(&identifier_key.address())
+            .id(identifier_key.address())
             .timestamp(now + 1)
             .modify(
-                &verification_key.address(),
+                verification_key.address(),
                 hashgraph::Role::Verification | hashgraph::Role::Invocation,
             )
             .modify(
-                &verification_key.address(),
+                verification_key.address(),
                 hashgraph::Role::Verification | hashgraph::Role::Invocation,
             )
             .sign(&invocation_key)
@@ -2002,10 +1974,10 @@ mod tests {
         // assign multiple roles to non-verification method
         let operation = graph
             .create()
-            .id(&identifier_key.address())
+            .id(identifier_key.address())
             .timestamp(now + 1)
             .modify(
-                &modified_key.address(),
+                modified_key.address(),
                 hashgraph::Role::Assertion | hashgraph::Role::Authentication,
             )
             .sign(&invocation_key)
@@ -2020,9 +1992,9 @@ mod tests {
         // assign the same roles to an existing key
         let operation = graph
             .create()
-            .id(&identifier_key.address())
+            .id(identifier_key.address())
             .timestamp(now + 1)
-            .modify(&verification_key.address(), hashgraph::Role::Verification)
+            .modify(verification_key.address(), hashgraph::Role::Verification)
             .sign(&invocation_key)
             .build()
             .expect("operation invalid");
@@ -2035,9 +2007,9 @@ mod tests {
         // revoke a key
         let operation = graph
             .create()
-            .id(&identifier_key.address())
+            .id(identifier_key.address())
             .timestamp(now + 1)
-            .revoke(&verification_key.address(), None)
+            .revoke(verification_key.address(), None)
             .sign(&invocation_key)
             .build()
             .expect("operation invalid");
@@ -2049,10 +2021,10 @@ mod tests {
         // modify the revoked key
         let operation = graph
             .create()
-            .id(&identifier_key.address())
+            .id(identifier_key.address())
             .timestamp(now + 2)
             .modify(
-                &verification_key.address(),
+                verification_key.address(),
                 hashgraph::Role::Verification | hashgraph::Role::Authentication,
             )
             .sign(&invocation_key)
@@ -2067,7 +2039,7 @@ mod tests {
         // deactivate the account
         let operation = graph
             .create()
-            .id(&identifier_key.address())
+            .id(identifier_key.address())
             .timestamp(now + 3)
             .deactivate(None)
             .sign(&invocation_key)
@@ -2081,10 +2053,10 @@ mod tests {
         // modify on a deactivated account
         let operation = graph
             .create()
-            .id(&identifier_key.address())
+            .id(identifier_key.address())
             .timestamp(now + 4)
             .modify(
-                &modified_key.address(),
+                modified_key.address(),
                 hashgraph::Role::Verification | hashgraph::Role::Authentication,
             )
             .sign(&invocation_key)
@@ -2108,9 +2080,9 @@ mod tests {
 
         let operation = graph
             .create()
-            .id(&identifier_key.address())
+            .id(identifier_key.address())
             .timestamp(now)
-            .grant_embedded(&invocation_key.address(), hashgraph::Role::Invocation)
+            .grant_embedded(invocation_key.address(), hashgraph::Role::Invocation)
             .sign(&identifier_key)
             .sign(&invocation_key)
             .build()
@@ -2123,7 +2095,7 @@ mod tests {
         // recover twice in the same operation
         let operation = graph
             .create()
-            .id(&identifier_key.address())
+            .id(identifier_key.address())
             .timestamp(now + 1)
             .recover(None)
             .recover(None)
@@ -2139,7 +2111,7 @@ mod tests {
         // recover leaving no active keys
         let operation = graph
             .create()
-            .id(&identifier_key.address())
+            .id(identifier_key.address())
             .timestamp(now + 1)
             .recover(None)
             .sign(&invocation_key)
@@ -2154,7 +2126,7 @@ mod tests {
         // deactivate the account
         let operation = graph
             .create()
-            .id(&identifier_key.address())
+            .id(identifier_key.address())
             .timestamp(now + 1)
             .deactivate(None)
             .sign(&invocation_key)
@@ -2168,7 +2140,7 @@ mod tests {
         // recover on a deactivated account
         let operation = graph
             .create()
-            .id(&identifier_key.address())
+            .id(identifier_key.address())
             .timestamp(now + 2)
             .recover(None)
             .sign(&invocation_key)
@@ -2192,9 +2164,9 @@ mod tests {
 
         let operation = graph
             .create()
-            .id(&identifier_key.address())
+            .id(identifier_key.address())
             .timestamp(now)
-            .grant_embedded(&invocation_key.address(), hashgraph::Role::Invocation)
+            .grant_embedded(invocation_key.address(), hashgraph::Role::Invocation)
             .sign(&identifier_key)
             .sign(&invocation_key)
             .build()
@@ -2207,7 +2179,7 @@ mod tests {
         // deactivate twice in the same operation
         let operation = graph
             .create()
-            .id(&identifier_key.address())
+            .id(identifier_key.address())
             .timestamp(now + 1)
             .deactivate(None)
             .deactivate(None)
@@ -2223,7 +2195,7 @@ mod tests {
         // deactivate the account
         let operation = graph
             .create()
-            .id(&identifier_key.address())
+            .id(identifier_key.address())
             .timestamp(now + 1)
             .deactivate(None)
             .sign(&invocation_key)
@@ -2237,7 +2209,7 @@ mod tests {
         // deactivate on a deactivated account
         let operation = graph
             .create()
-            .id(&identifier_key.address())
+            .id(identifier_key.address())
             .timestamp(now + 2)
             .deactivate(None)
             .sign(&invocation_key)
@@ -2262,7 +2234,7 @@ mod tests {
         // initial operation noop
         let operation = graph
             .create()
-            .id(&identifier_key.address())
+            .id(identifier_key.address())
             .timestamp(now)
             .sign(&identifier_key)
             .build()
@@ -2275,9 +2247,9 @@ mod tests {
 
         let operation = graph
             .create()
-            .id(&identifier_key.address())
+            .id(identifier_key.address())
             .timestamp(now)
-            .grant_embedded(&invocation_key.address(), hashgraph::Role::Invocation)
+            .grant_embedded(invocation_key.address(), hashgraph::Role::Invocation)
             .sign(&identifier_key)
             .sign(&invocation_key)
             .build()
@@ -2290,7 +2262,7 @@ mod tests {
         // deactivate twice in the same operation
         let operation = graph
             .create()
-            .id(&identifier_key.address())
+            .id(identifier_key.address())
             .timestamp(now + 1)
             .sign(&invocation_key)
             .build()

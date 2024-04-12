@@ -107,7 +107,7 @@ impl<'a> OperationBuilder<'a> {
 
         self.builder.reset();
 
-        let sb = self.builder.create_vector(&kp.address());
+        let sb = self.builder.create_vector(kp.address());
 
         let header = hashgraph::SignatureHeader::create(
             &mut self.builder,

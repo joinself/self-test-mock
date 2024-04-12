@@ -18,6 +18,7 @@ hex = "0.4.3"
 hyper = "0.14.26"
 libc = "0.2"
 ntp = "0.5.0"
+postcard = { version = "1.0.8", features = ["alloc"] }
 prost = { version = "0.12" }
 rand = "0.8.5"
 rand_chacha = "0.3.1"
