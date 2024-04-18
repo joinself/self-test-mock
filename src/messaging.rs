@@ -60,7 +60,20 @@ where
         tokio::select! {
             message = socket_rx.next() => {
                 if let Some(m) = message {
-                    let m = m.expect("socket rx event failed");
+                    let m = match m {
+                        Ok(m) => m,
+                        Err(err) => {
+                                if let tungstenite::Error::Protocol(perr) = &err {
+                                    if *perr == tungstenite::error::ProtocolError::ResetWithoutClosingHandshake {
+                                        return
+                                    }
+                                }
+
+                                println!("socket rx: {}", err);
+                                return;
+
+                        }
+                    };
 
                     if m.is_binary() {
                         let data = m.into_data().clone();

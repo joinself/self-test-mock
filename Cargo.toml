@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 async-channel = "1.8.0"
-axum = {version =  "0.6.16", features = ["macros"]}
+axum = {version =  "0.7.5", features = ["macros"]}
 base64 = "0.13.1"
 byteorder = "1.4.3"
 chrono = "0.4.22"
@@ -25,13 +25,13 @@ rand_chacha = "0.3.1"
 serde = { version = "1.0.147", features = ["derive"] }
 sha3 = "0.10.8"
 sodium_sys = { git = "https://github.com/joinself/sodium-sys" }
-tokio = { version = "1.23.0", features = ["full", "macros"] }
-tokio-tungstenite = { version = "0.18.0", features = ["rustls-tls-native-roots"] }
+tokio = { version = "1.37.0", features = ["full", "macros"] }
+tokio-tungstenite = { version = "0.21.0", features = ["rustls-tls-native-roots"] }
 tonic = "0.11"
-tower-http = {version = "0.4.0", features = ["full"] }
+tower-http = {version = "0.5.2", features = ["full"] }
 tracing = "0.1.37"
 tracing-subscriber = "0.3.17"
-tungstenite = "0.18.0"
+tungstenite = "0.21.0"
 
 [build-dependencies]
 tonic-build = "0.11"
