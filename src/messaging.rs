@@ -249,7 +249,6 @@ async fn handle_subscribe(
         .expect("Subscribe subscriptions empty")
     {
         let details_buf = subscription.details().expect("Subscription details empty");
-        let details_len = details_buf.len();
         let signatures = subscription
             .signatures()
             .expect("Subscription signatures empty");
@@ -269,13 +268,9 @@ async fn handle_subscribe(
                     // authenticate the subscriber over the subscriptions details
                     let signer = signature.signer().unwrap_or(inbox);
 
-                    let mut details_sig_buf = vec![0; details_len + 1];
-                    details_sig_buf[0] = messaging::SignatureType::PAYLOAD.0 as u8;
-                    details_sig_buf[1..details_len + 1].copy_from_slice(details_buf);
-
                     let pk = PublicKey::from_bytes(signer).expect("Subscription signer invalid");
 
-                    if !(pk.verify(&details_sig_buf, sig)) {
+                    if !(pk.verify(&details_buf, sig)) {
                         return Err(GenericError::new("bad authentication signature"));
                     };
 
