@@ -48,7 +48,7 @@ impl ProofOfWork {
         loop {
             hash_buf[data.len()..].copy_from_slice(&nonce.to_le_bytes());
 
-            let hash = crate::crypto::hash::blake2b(&hash_buf);
+            let hash = crate::crypto::hash::sha3(&hash_buf);
 
             if self.matches(&hash) {
                 return (hash, nonce);
@@ -67,7 +67,7 @@ impl ProofOfWork {
         hash_buf[..data.len()].copy_from_slice(data);
         hash_buf[data.len()..].copy_from_slice(&nonce.to_le_bytes());
 
-        let computed_hash = crate::crypto::hash::blake2b(&hash_buf);
+        let computed_hash = crate::crypto::hash::sha3(&hash_buf);
 
         computed_hash == hash
     }
