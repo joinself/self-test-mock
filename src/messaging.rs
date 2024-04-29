@@ -85,10 +85,10 @@ where
                             messaging::EventType::MESSAGE => {
                                 // println!(">>> received ws message...");
 
-                                match handle_message(&data, content, &datastore).await {
-                                    Ok(_) => ack(&mut socket_tx, event.id().unwrap()).await,
+                                match handle_message(&data, content.bytes(), &datastore).await {
+                                    Ok(_) => ack(&mut socket_tx, event.id().unwrap().bytes()).await,
                                     Err(ge) => {
-                                        err(&mut socket_tx, event.id().unwrap(), ge.details.as_bytes()).await;
+                                        err(&mut socket_tx, event.id().unwrap().bytes(), ge.details.as_bytes()).await;
                                         break;
                                     },
                                 }
@@ -96,11 +96,11 @@ where
                             messaging::EventType::SUBSCRIBE => {
                                 // println!(">>> received ws subscribe...");
 
-                                match handle_subscribe(content, write_tx.clone(), &connection_id, &mut subscriptions, &datastore).await {
-                                    Ok(_) => ack(&mut socket_tx, event.id().unwrap()).await,
+                                match handle_subscribe(content.bytes(), write_tx.clone(), &connection_id, &mut subscriptions, &datastore).await {
+                                    Ok(_) => ack(&mut socket_tx, event.id().unwrap().bytes()).await,
                                     Err(ge) => {
                                         println!("subscribe failed: {}", ge);
-                                        err(&mut socket_tx, event.id().unwrap(), ge.details.as_bytes()).await;
+                                        err(&mut socket_tx, event.id().unwrap().bytes(), ge.details.as_bytes()).await;
                                         break;
                                     },
                                 }
@@ -108,11 +108,11 @@ where
                             messaging::EventType::OPEN => {
                                 // println!(">>> received ws open...");
 
-                                match handle_open(content, &datastore).await {
-                                    Ok(_) => ack(&mut socket_tx, event.id().unwrap()).await,
+                                match handle_open(content.bytes(), &datastore).await {
+                                    Ok(_) => ack(&mut socket_tx, event.id().unwrap().bytes()).await,
                                     Err(ge) => {
                                         println!("open err: {}", ge);
-                                        err(&mut socket_tx, event.id().unwrap(), ge.details.as_bytes()).await;
+                                        err(&mut socket_tx, event.id().unwrap().bytes(), ge.details.as_bytes()).await;
                                         break;
                                     },
                                 }
@@ -168,7 +168,7 @@ async fn handle_message(
         .expect("Failed to process websocket message content");
 
     let payload = match message.payload() {
-        Some(payload) => flatbuffers::root::<messaging::Payload>(payload)
+        Some(payload) => flatbuffers::root::<messaging::Payload>(payload.bytes())
             .expect("Failed to process websocket message content"),
         None => return Err(GenericError::new("invalid message payload")),
     };
@@ -182,16 +182,16 @@ async fn handle_message(
     if let Some(recipient) = payload.recipient() {
         let mut ds = datastore.lock().await;
         // If the inbox exists, push the message
-        if let Some(inbox) = ds.messages.get_mut(recipient) {
+        if let Some(inbox) = ds.messages.get_mut(recipient.bytes()) {
             inbox.push(data.to_vec());
         } else {
             return Err(GenericError::new("recipient inbox not found"));
         };
 
         // if there are subscribers, forward them the messages
-        if let Some(subscribers) = ds.subscribers.get_mut(recipient) {
-            for (connection_id, subscriber, sub) in subscribers {
-                if (*subscriber).eq(sender) {
+        if let Some(subscribers) = ds.subscribers.get_mut(recipient.bytes()) {
+            for (_, subscriber, sub) in subscribers {
+                if (*subscriber).eq(sender.bytes()) {
                     // skip messages from the same sender
                     continue;
                 }
@@ -212,7 +212,7 @@ async fn handle_open(
         .expect("Failed to process websocket message content");
 
     let details = match message.details() {
-        Some(details) => flatbuffers::root::<messaging::OpenDetails>(details)
+        Some(details) => flatbuffers::root::<messaging::OpenDetails>(details.bytes())
             .expect("Failed to process websocket message content"),
         None => return Err(GenericError::new("invalid message payload")),
     };
@@ -221,10 +221,10 @@ async fn handle_open(
     if let Some(inbox) = details.inbox() {
         let mut ds = datastore.lock().await;
         // If the inbox exists, push the message
-        if ds.messages.contains_key(inbox) {
+        if ds.messages.contains_key(inbox.bytes()) {
             return Err(GenericError::new("recipient inbox not found"));
         } else {
-            ds.messages.insert(inbox.to_owned(), Vec::new());
+            ds.messages.insert(Vec::from(inbox.bytes()), Vec::new());
         };
     }
 
@@ -253,7 +253,7 @@ async fn handle_subscribe(
             .signatures()
             .expect("Subscription signatures empty");
 
-        let details = flatbuffers::root::<messaging::SubscriptionDetails>(details_buf)
+        let details = flatbuffers::root::<messaging::SubscriptionDetails>(details_buf.bytes())
             .expect("Subscription details invalid");
         let inbox = details.inbox().expect("Subscription inbox missing");
 
@@ -268,23 +268,26 @@ async fn handle_subscribe(
                     // authenticate the subscriber over the subscriptions details
                     let signer = signature.signer().unwrap_or(inbox);
 
-                    let pk = PublicKey::from_bytes(signer).expect("Subscription signer invalid");
+                    let pk =
+                        PublicKey::from_bytes(signer.bytes()).expect("Subscription signer invalid");
 
-                    if !(pk.verify(&details_buf, sig)) {
+                    if !(pk.verify(&details_buf.bytes(), sig.bytes())) {
                         return Err(GenericError::new("bad authentication signature"));
                     };
 
                     // if the signer is the inbox that a subscription is being requested for, then we can exit
-                    if inbox == signer {
-                        (authenticated_as, authorized_by) =
-                            (Some(signer.to_vec()), Some(signer.to_vec()));
+                    if inbox.bytes() == signer.bytes() {
+                        (authenticated_as, authorized_by) = (
+                            Some(Vec::from(signer.bytes())),
+                            Some(Vec::from(signer.bytes())),
+                        );
                         break;
                     }
 
-                    authenticated_as = Some(signer.to_vec());
+                    authenticated_as = Some(Vec::from(signer.bytes()));
                 }
                 messaging::SignatureType::TOKEN => {
-                    let token = match Token::decode(sig) {
+                    let token = match Token::decode(sig.bytes()) {
                         Ok(token) => token,
                         Err(_) => return Err(GenericError::new("bad token encoding")),
                     };
@@ -314,7 +317,7 @@ async fn handle_subscribe(
             None => return Err(GenericError::new("unauthorized subscription")),
         };
 
-        if inbox != authorized_by {
+        if inbox.bytes() != authorized_by {
             return Err(GenericError::new("unauthorized subscription"));
         }
 

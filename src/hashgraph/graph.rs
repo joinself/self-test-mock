@@ -131,11 +131,11 @@ impl Hashgraph {
             };
 
             if verify {
-                let header_hash = crate::crypto::hash::sha3(header_data);
+                let header_hash = crate::crypto::hash::sha3(header_data.bytes());
                 self.sig_buf[65..97].copy_from_slice(&header_hash);
             }
 
-            let header = flatbuffers::root::<SignatureHeader>(header_data)
+            let header = flatbuffers::root::<SignatureHeader>(header_data.bytes())
                 .map_err(|_| SelfError::HashgraphInvalidSignatureHeader)?;
 
             let signer = match header.signer() {
@@ -147,15 +147,15 @@ impl Hashgraph {
                 return Err(SelfError::HashgraphInvalidSignerLength);
             }
 
-            if verify {
-                if op.sequence() == 0 && i == 0 {
-                    // if this is the first signature on the first operation
-                    // this is the key used as an identifier for the account.
-                    // copy it to the sig buffer for verifying signatures
-                    self.identifier = Some(signer.to_vec());
-                    self.sig_buf[0..33].copy_from_slice(signer);
-                }
+            if op.sequence() == 0 && i == 0 {
+                // if this is the first signature on the first operation
+                // this is the key used as an identifier for the account.
+                // copy it to the sig buffer for verifying signatures
+                self.identifier = Some(Vec::from(signer.bytes()));
+                self.sig_buf[0..33].copy_from_slice(signer.bytes());
+            }
 
+            if verify {
                 let signature_data = match signature.signature() {
                     Some(signature) => signature,
                     None => return Err(SelfError::HashgraphInvalidSignatureLength),
@@ -165,17 +165,17 @@ impl Hashgraph {
                     return Err(SelfError::HashgraphInvalidSignatureLength);
                 }
 
-                let signers_pk = PublicKey::from_bytes(signer)?;
-                if !signers_pk.verify(&self.sig_buf, signature_data) {
+                let signers_pk = PublicKey::from_bytes(signer.bytes())?;
+                if !signers_pk.verify(&self.sig_buf, signature_data.bytes()) {
                     return Err(SelfError::HashgraphInvalidSignature);
                 }
 
-                if signers.contains(signer) {
+                if signers.contains(signer.bytes()) {
                     return Err(SelfError::HashgraphDuplicateSigner);
                 }
             }
 
-            signers.insert(signer.to_vec());
+            signers.insert(Vec::from(signer.bytes()));
         }
 
         Ok(())
@@ -223,7 +223,7 @@ impl Hashgraph {
                 None => return Err(SelfError::HashgraphInvalidPreviousHash),
             };
 
-            let hash_index = match self.hashes.get(previous_hash) {
+            let hash_index = match self.hashes.get(previous_hash.bytes()) {
                 Some(hash_index) => hash_index,
                 None => return Err(SelfError::HashgraphInvalidPreviousHash),
             };
@@ -295,7 +295,7 @@ impl Hashgraph {
             None => return Err(SelfError::HashgraphOperationInvalid),
         };
 
-        let operation = flatbuffers::root::<Operation>(operation_data)
+        let operation = flatbuffers::root::<Operation>(operation_data.bytes())
             .map_err(|_| SelfError::HashgraphOperationInvalid)?;
 
         if operation.actions().is_none() {
@@ -303,7 +303,7 @@ impl Hashgraph {
         }
 
         if verify {
-            let operation_hash = crate::crypto::hash::sha3(operation_data);
+            let operation_hash = crate::crypto::hash::sha3(operation_data.bytes());
 
             // copy the operation hash to ourr temporary buffer we
             // will use to calcuate signatures for each signer
@@ -467,12 +467,12 @@ impl Hashgraph {
 
                     // check that the key has self signed the operation
                     // if it can sign the operation
-                    if !signers.contains(id) && id[0] == 0 {
+                    if !signers.contains(id.bytes()) && id.get(0) == 0 {
                         return Err(SelfError::HashgraphSelfSignatureRequired);
                     }
 
                     // check this embedded key does not already exist
-                    if self.keys.contains_key(id) {
+                    if self.keys.contains_key(id.bytes()) {
                         return Err(SelfError::HashgraphDuplicateKey);
                     }
 
@@ -499,11 +499,11 @@ impl Hashgraph {
                         return Err(SelfError::HashgraphMultiRoleKeyViolation);
                     }
 
-                    if references.contains_key(id) {
+                    if references.contains_key(id.bytes()) {
                         return Err(SelfError::HashgraphDuplicateAction);
                     }
 
-                    references.insert(id.to_vec(), (Actionable::Grant, action.roles()));
+                    references.insert(Vec::from(id.bytes()), (Actionable::Grant, action.roles()));
                 }
             }
             Description::Reference => {
@@ -527,12 +527,12 @@ impl Hashgraph {
                     }
 
                     // check that the key has self signed the operation
-                    if !signers.contains(id) {
+                    if !signers.contains(id.bytes()) {
                         return Err(SelfError::HashgraphSelfSignatureRequired);
                     }
 
                     // check this embedded key does not already exist
-                    if self.keys.contains_key(id) {
+                    if self.keys.contains_key(id.bytes()) {
                         return Err(SelfError::HashgraphDuplicateKey);
                     }
 
@@ -540,11 +540,11 @@ impl Hashgraph {
                         return Err(SelfError::HashgraphNoRolesAssigned);
                     }
 
-                    if references.contains_key(id) {
+                    if references.contains_key(id.bytes()) {
                         return Err(SelfError::HashgraphDuplicateAction);
                     }
 
-                    references.insert(id.to_vec(), (Actionable::Grant, action.roles()));
+                    references.insert(Vec::from(id.bytes()), (Actionable::Grant, action.roles()));
                 }
             }
             _ => return Err(SelfError::HashgraphInvalidDescription),
@@ -567,7 +567,9 @@ impl Hashgraph {
                         None => return Err(SelfError::HashgraphInvalidKeyLength),
                     };
 
-                    let controller = embedded.controller().map(|controller| controller.to_vec());
+                    let controller = embedded
+                        .controller()
+                        .map(|controller| Vec::from(controller.bytes()));
 
                     let node = Rc::new(RefCell::new(Node {
                         controller,
@@ -576,7 +578,7 @@ impl Hashgraph {
                             role: action.roles(),
                             from: op.timestamp(),
                         }],
-                        public_key: PublicKey::from_bytes(id)?,
+                        public_key: PublicKey::from_bytes(id.bytes())?,
                         created_at: op.timestamp(),
                         revoked_at: 0,
                         incoming: Vec::new(),
@@ -587,18 +589,18 @@ impl Hashgraph {
                     // a self signed signature
                     for signer in signers.iter() {
                         if op.sequence() == 0 && self.root.is_none() {
-                            if signer == id
+                            if signer == id.bytes()
                                 && self
                                     .identifier
                                     .as_ref()
-                                    .is_some_and(|identifier| identifier != id)
+                                    .is_some_and(|identifier| identifier != id.bytes())
                             {
                                 self.root = Some(node.clone())
                             }
                             continue;
                         }
 
-                        if id == signer {
+                        if id.bytes() == signer {
                             // this is a self signed signature, skip it
                             continue;
                         }
@@ -615,11 +617,17 @@ impl Hashgraph {
                             }
                         };
 
+                        if !parent.as_ref().borrow().has_roles(Role::Invocation.bits()) {
+                            // if the signer isn't the authorizing the operation
+                            // then dont link it to our new key
+                            continue;
+                        }
+
                         node.as_ref().borrow_mut().incoming.push((*parent).clone());
                         parent.as_ref().borrow_mut().outgoing.push(node.clone());
                     }
 
-                    self.keys.insert(id.to_vec(), node);
+                    self.keys.insert(Vec::from(id.bytes()), node);
                 }
             }
             Description::Reference => {
@@ -630,7 +638,7 @@ impl Hashgraph {
                     };
 
                     let controller = match reference.controller() {
-                        Some(controller) => controller.to_vec(),
+                        Some(controller) => Vec::from(controller.bytes()),
                         None => return Err(SelfError::HashgraphInvalidControllerLength),
                     };
 
@@ -641,7 +649,7 @@ impl Hashgraph {
                             role: action.roles(),
                             from: op.timestamp(),
                         }],
-                        public_key: PublicKey::from_bytes(id)?,
+                        public_key: PublicKey::from_bytes(id.bytes())?,
                         created_at: op.timestamp(),
                         revoked_at: 0,
                         incoming: Vec::new(),
@@ -652,18 +660,18 @@ impl Hashgraph {
                     // a self signed signature
                     for signer in signers.iter() {
                         if op.sequence() == 0 && self.root.is_none() {
-                            if signer == id
+                            if signer == id.bytes()
                                 && self
                                     .identifier
                                     .as_ref()
-                                    .is_some_and(|identifier| identifier != id)
+                                    .is_some_and(|identifier| identifier != id.bytes())
                             {
                                 self.root = Some(node.clone())
                             }
                             continue;
                         }
 
-                        if id == signer {
+                        if id.bytes() == signer {
                             // this is a self signed signature, skip it
                             continue;
                         }
@@ -684,7 +692,7 @@ impl Hashgraph {
                         parent.as_ref().borrow_mut().outgoing.push(node.clone());
                     }
 
-                    self.keys.insert(id.to_vec(), node);
+                    self.keys.insert(Vec::from(id.bytes()), node);
                 }
             }
             _ => return Err(SelfError::HashgraphInvalidDescription),
@@ -723,7 +731,7 @@ impl Hashgraph {
                     }
 
                     // check this embedded key does not already exist
-                    let key = match self.keys.get(id) {
+                    let key = match self.keys.get(id.bytes()) {
                         Some(key) => key.as_ref().borrow(),
                         None => return Err(SelfError::HashgraphReferencedDescriptionNotFound),
                     };
@@ -736,11 +744,11 @@ impl Hashgraph {
                         return Err(SelfError::HashgraphInvalidRevocationTimestamp);
                     }
 
-                    if references.contains_key(id) {
+                    if references.contains_key(id.bytes()) {
                         return Err(SelfError::HashgraphDuplicateAction);
                     }
 
-                    references.insert(id.to_vec(), (Actionable::Revoke, 0));
+                    references.insert(Vec::from(id.bytes()), (Actionable::Revoke, 0));
                 }
             }
             _ => return Err(SelfError::HashgraphInvalidDescription),
@@ -756,7 +764,7 @@ impl Hashgraph {
                 None => return Err(SelfError::HashgraphInvalidKeyLength),
             };
 
-            let key = match self.keys.get_mut(id) {
+            let key = match self.keys.get_mut(id.bytes()) {
                 Some(key) => key,
                 None => return Err(SelfError::HashgraphReferencedDescriptionNotFound),
             };
@@ -807,7 +815,7 @@ impl Hashgraph {
                     }
 
                     // check this embedded key does not already exist
-                    let key = match self.keys.get(id) {
+                    let key = match self.keys.get(id.bytes()) {
                         Some(key) => key.as_ref().borrow_mut(),
                         None => return Err(SelfError::HashgraphReferencedDescriptionNotFound),
                     };
@@ -830,11 +838,11 @@ impl Hashgraph {
                         return Err(SelfError::HashgraphKeyAlreadyRevoked);
                     }
 
-                    if references.contains_key(id) {
+                    if references.contains_key(id.bytes()) {
                         return Err(SelfError::HashgraphDuplicateAction);
                     }
 
-                    references.insert(id.to_vec(), (Actionable::Modify, action.roles()));
+                    references.insert(Vec::from(id.bytes()), (Actionable::Modify, action.roles()));
                 }
             }
             _ => return Err(SelfError::HashgraphInvalidDescription),
@@ -850,7 +858,7 @@ impl Hashgraph {
                 None => return Err(SelfError::HashgraphInvalidKeyLength),
             };
 
-            let key = match self.keys.get_mut(id) {
+            let key = match self.keys.get_mut(id.bytes()) {
                 Some(key) => key,
                 None => return Err(SelfError::HashgraphReferencedDescriptionNotFound),
             };
@@ -991,8 +999,7 @@ impl Hashgraph {
     fn operation(&self, index: usize) -> Operation {
         let signed_op = root_as_signed_operation(&self.operations[index]).unwrap();
         let op_bytes = signed_op.operation().unwrap();
-
-        return flatbuffers::root::<Operation>(op_bytes).unwrap();
+        flatbuffers::root::<Operation>(op_bytes.bytes()).unwrap()
     }
 }
 

@@ -17,6 +17,7 @@ enum Role : ulong (bit_flags) {
     Delegation,
     Invocation,
     KeyAgreement,
+    Messaging,
 }
 
 // defines an embedded description of a key
