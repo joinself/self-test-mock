@@ -1,5 +1,6 @@
 use crate::crypto::pow::ProofOfWork;
 use crate::datastore::Datastore;
+use crate::hashgraph::Hashgraph;
 use crate::protocol::rpc;
 use crate::protocol::rpc::api_server::{Api, ApiServer};
 use crate::protocol::rpc::{
@@ -113,14 +114,28 @@ impl Api for ApiHandler {
 
         let execute = match ExecuteRequest::decode(payload.content.as_ref()) {
             Ok(execute) => execute,
-            Err(_) => return Err(Status::unknown("bad request encoding")),
+            Err(err) => return Err(Status::unknown("bad request encoding")),
         };
 
         let mut datastore = self.datastore.lock().await;
+        let mut graph = Hashgraph::new();
 
-        datastore
-            .identities
-            .insert(execute.id, vec![execute.operation]);
+        if let Some(history) = datastore.identities.get(&execute.id) {
+            graph = match Hashgraph::load(history, false) {
+                Ok(graph) => graph,
+                Err(_) => return Err(Status::unknown("invalid hashgraph history")),
+            };
+        } else {
+            datastore.identities.insert(execute.id.clone(), Vec::new());
+        }
+
+        if graph.execute(execute.operation.clone()).is_err() {
+            return Err(Status::unknown("invalid hashgraph operation"));
+        }
+
+        if let Some(identity) = datastore.identities.get_mut(&execute.id) {
+            identity.push(execute.operation);
+        }
 
         let reply = rpc::Response {
             header: Some(rpc::ResponseHeader {
