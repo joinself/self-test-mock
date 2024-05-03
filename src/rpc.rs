@@ -11,6 +11,7 @@ use crate::protocol::rpc::{
 use prost::Message;
 use tokio::sync::Mutex;
 use tonic::{transport::Server, Request, Response, Status};
+use tracing_subscriber::filter;
 
 use std::collections::VecDeque;
 use std::sync::Arc;
@@ -64,7 +65,13 @@ impl Api for ApiHandler {
 
         let mut content = Vec::new();
 
-        let encode_result = ResolveResponse { log: log.to_vec() }.encode(&mut content);
+
+        let mut filtered_log: Vec<Vec<u8>> = Vec::new();
+        if log.len() > resolve.from as usize {
+            filtered_log = log.clone().split_off(resolve.from as usize);
+        }
+
+        let encode_result = ResolveResponse { log: filtered_log }.encode(&mut content);
 
         if encode_result.is_err() {
             return Err(Status::internal("internal server error"));
