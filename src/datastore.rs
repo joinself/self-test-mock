@@ -10,8 +10,9 @@ pub struct Datastore {
     pub identities: HashMap<Vec<u8>, Vec<Vec<u8>>>,
     pub keys: HashMap<Vec<u8>, Option<PublicKey>>,
     pub messages: HashMap<Vec<u8>, Vec<Vec<u8>>>,
-    pub one_time_keys: HashMap<Vec<u8>, VecDeque<Vec<u8>>>,
+    pub key_packages: HashMap<Vec<u8>, VecDeque<Vec<u8>>>,
     pub subscribers: HashMap<Vec<u8>, Vec<Subscription>>,
+    pub objects: HashMap<String, Vec<u8>>,
 }
 
 impl Datastore {
@@ -20,8 +21,9 @@ impl Datastore {
             identities: HashMap::new(),
             keys: HashMap::new(),
             messages: HashMap::new(),
-            one_time_keys: HashMap::new(),
+            key_packages: HashMap::new(),
             subscribers: HashMap::new(),
+            objects: HashMap::new(),
         }
     }
 }

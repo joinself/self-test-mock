@@ -65,7 +65,6 @@ impl Api for ApiHandler {
 
         let mut content = Vec::new();
 
-
         let mut filtered_log: Vec<Vec<u8>> = Vec::new();
         if log.len() > resolve.from as usize {
             filtered_log = log.clone().split_off(resolve.from as usize);
@@ -121,7 +120,7 @@ impl Api for ApiHandler {
 
         let execute = match ExecuteRequest::decode(payload.content.as_ref()) {
             Ok(execute) => execute,
-            Err(err) => return Err(Status::unknown("bad request encoding")),
+            Err(_) => return Err(Status::unknown("bad request encoding")),
         };
 
         let mut datastore = self.datastore.lock().await;
@@ -179,7 +178,7 @@ impl Api for ApiHandler {
 
         let mut datastore = self.datastore.lock().await;
 
-        let key = match datastore.one_time_keys.get_mut(&acquire.id) {
+        let key = match datastore.key_packages.get_mut(&acquire.id) {
             Some(queue) => match queue.pop_front() {
                 Some(key) => key,
                 None => return Err(Status::not_found("inbox not found")),
@@ -228,14 +227,14 @@ impl Api for ApiHandler {
 
         let mut datastore = self.datastore.lock().await;
 
-        let queue = match datastore.one_time_keys.get_mut(&publish.id) {
+        let queue = match datastore.key_packages.get_mut(&publish.id) {
             Some(queue) => queue,
             None => {
                 datastore
-                    .one_time_keys
+                    .key_packages
                     .insert(publish.id.clone(), VecDeque::new());
                 datastore
-                    .one_time_keys
+                    .key_packages
                     .get_mut(&publish.id)
                     .expect("not empty")
             }
@@ -270,14 +269,14 @@ impl Api for ApiHandler {
 
         let mut datastore = self.datastore.lock().await;
 
-        let keys: Vec<Vec<u8>> = match datastore.one_time_keys.get_mut(&publish.id) {
+        let keys: Vec<Vec<u8>> = match datastore.key_packages.get_mut(&publish.id) {
             Some(queue) => queue,
             None => {
                 datastore
-                    .one_time_keys
+                    .key_packages
                     .insert(publish.id.clone(), VecDeque::new());
                 datastore
-                    .one_time_keys
+                    .key_packages
                     .get_mut(&publish.id)
                     .expect("not empty")
             }
@@ -321,14 +320,14 @@ impl Api for ApiHandler {
 
         let mut datastore = self.datastore.lock().await;
 
-        match datastore.one_time_keys.get_mut(&publish.id) {
+        match datastore.key_packages.get_mut(&publish.id) {
             Some(queue) => queue,
             None => {
                 datastore
-                    .one_time_keys
+                    .key_packages
                     .insert(publish.id.clone(), VecDeque::new());
                 datastore
-                    .one_time_keys
+                    .key_packages
                     .get_mut(&publish.id)
                     .expect("not empty")
             }

@@ -4,6 +4,7 @@ mod error;
 mod hashgraph;
 mod keypair;
 mod messaging;
+mod object;
 mod protocol;
 mod rpc;
 pub mod server;
