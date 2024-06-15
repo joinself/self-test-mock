@@ -10,7 +10,10 @@ use tokio::{
     runtime::Runtime,
     sync::Mutex,
 };
-use tokio_tungstenite::{accept_async, tungstenite::protocol::Message, WebSocketStream};
+use tokio_tungstenite::{
+    accept_async, tungstenite::error::ProtocolError, tungstenite::protocol::Message,
+    WebSocketStream,
+};
 
 use std::sync::Arc;
 
@@ -63,15 +66,19 @@ where
                     let m = match m {
                         Ok(m) => m,
                         Err(err) => {
-                                if let tungstenite::Error::Protocol(perr) = &err {
-                                    if *perr == tungstenite::error::ProtocolError::ResetWithoutClosingHandshake {
-                                        return
-                                    }
+                                match err {
+                                    tungstenite::Error::Protocol(perr) => {
+                                        match perr {
+                                            ProtocolError::ResetWithoutClosingHandshake => return,
+                                            err => println!("socket rx: {}", err),
+                                        }
+                                    },
+                                    tungstenite::Error::AlreadyClosed => return,
+                                    tungstenite::Error::ConnectionClosed => return,
+                                    tungstenite::Error::Io(_) => return,
+                                    err => println!("socket rx: {}", err),
                                 }
-
-                                println!("socket rx: {}", err);
-                                return;
-
+                                return
                         }
                     };
 
@@ -190,14 +197,22 @@ async fn handle_message(
 
         // if there are subscribers, forward them the messages
         if let Some(subscribers) = ds.subscribers.get_mut(recipient.bytes()) {
-            for (_, subscriber, sub) in subscribers {
+            let mut errored_subscribers = Vec::new();
+
+            for (i, (_, subscriber, sub)) in subscribers.iter().enumerate() {
                 if (*subscriber).eq(sender.bytes()) {
                     // skip messages from the same sender
                     continue;
                 }
-                sub.send(Message::Binary(data.to_vec()))
-                    .await
-                    .expect("failed to send message to subscriber");
+
+                if sub.send(Message::Binary(data.to_vec())).await.is_err() {
+                    sub.close();
+                    errored_subscribers.push(i);
+                }
+            }
+
+            for sub in errored_subscribers {
+                subscribers.remove(sub);
             }
         };
     }
@@ -271,7 +286,7 @@ async fn handle_subscribe(
                     let pk =
                         PublicKey::from_bytes(signer.bytes()).expect("Subscription signer invalid");
 
-                    if !(pk.verify(&details_buf.bytes(), sig.bytes())) {
+                    if !(pk.verify(details_buf.bytes(), sig.bytes())) {
                         return Err(GenericError::new("bad authentication signature"));
                     };
 
@@ -336,9 +351,6 @@ async fn handle_subscribe(
 
         subscriptions.push(authorized_by.to_vec());
         new_subscriptions.push((authorized_by, authenticated_as));
-
-        // subscriptions.push(inbox.to_vec());
-        // new_subscriptions.push(inbox.to_vec());
     }
 
     let mut ds = datastore.lock().await;
